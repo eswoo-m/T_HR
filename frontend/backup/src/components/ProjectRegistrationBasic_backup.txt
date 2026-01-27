@@ -1,0 +1,5 @@
+Line 1635 needs to be changed from:
+className="hover:bg-red-50 hover:text-red-600"
+
+to:
+className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
