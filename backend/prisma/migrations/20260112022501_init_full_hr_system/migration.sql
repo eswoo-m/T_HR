@@ -76,7 +76,7 @@ CREATE TABLE "employee_detail" (
     "edu_level" TEXT,
     "last_school" TEXT,
     "major" TEXT,
-    "marital_status" "MaritalStatus" NOT NULL DEFAULT 'SINGLE',
+    "marital_status" "MaritalStatus" NOT NULL DEFAULT '미혼',
     "wedding_anniv" DATE,
     "emergency_phone" TEXT,
     "emergency_relation" TEXT,

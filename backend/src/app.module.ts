@@ -11,7 +11,7 @@ import { ProjectModule } from './modules/project/project.module';
   imports: [
     ConfigModule.forRoot({
       // 핵심: NODE_ENV가 local이면 .env.local 파일을 읽어옵니다.
-      envFilePath: `.env.${process.env.NODE_ENV || 'local'}`,
+      envFilePath: process.env.NODE_ENV === 'dev' ? '.env.dev' : '.env',
       load: [configuration, databaseConfig],
       isGlobal: true, // 서비스 어디서든 process.env를 쓸 수 있게 함
     }),

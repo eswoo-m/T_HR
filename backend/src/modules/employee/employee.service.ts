@@ -15,14 +15,13 @@ import * as bcrypt from 'bcrypt';
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   include: {
     employeeDetail: true;
-    TechnicalAbility: true; // 아까 확인한 대소문자 규격에 맞게 유지
+    technicalAbility: true;
     employeeTool: true;
     department: true;
     team: true;
     certificates: true;
     previousExperiences: true;
     assets: true;
-    technicalAbility: true;
     preProjectAssignments: true;
     projectAssignments: {
       include: {
@@ -90,14 +89,15 @@ export class EmployeeService {
         await tx.employeeDetail.create({
           data: {
             employeeId: employee.id,
-            type: dto.type,
-            hrStatus: dto.hrStatus,
+            type: dto.type || '정규직',
+            hrStatus: dto.hrStatus || '재직',
+            skillLevel: dto.skillLevel || '초급',
             lastSchool: dto.lastSchool,
             major: dto.major,
             // previousExperiences: dto.previousExperiences,
             // certificates: dto.certificates,
             maritalStatus: dto.maritalStatus,
-            totalSwExperience: dto.totalSwExperience,
+            totalSwExperience: dto.totalSwExperience || 0,
             zipCode: dto.zipCode,
             address: dto.address,
             addressDetail: dto.addressDetail,

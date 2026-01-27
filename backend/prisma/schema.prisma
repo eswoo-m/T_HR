@@ -4,10 +4,10 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
-generator erd {
-  provider = "prisma-erd-generator"
-  output   = "./ERD.pdf"
-}
+//generator erd {
+//  provider = "prisma-erd-generator"
+//  output   = "./ERD.pdf"
+//}
 
 // 1. 클라이언트 생성기 (이 부분이 빠지면 Wasm 에러가 날 수 있습니다)
 generator client {
@@ -120,9 +120,9 @@ model EmployeeDetail {
   employeeId String   @unique @map("employee_id")
   employee   Employee @relation(fields: [employeeId], references: [id])
 
-  type           String    @default("REGULAR") @map("type") // 직원유형(정규직, 계약직, 프리랜서)
-  hrStatus       String    @default("EMPLOYED") @map("hr_status") // 직원구분(재직, 퇴사, 휴직)
-  skillLevel     String    @default("SKL001") @map("skill_level") // 레벨(초급, 중급, 고급, 특급)
+  type           String    @default("정규직") @map("type") // 직원유형(정규직, 계약직, 프리랜서)
+  hrStatus       String    @default("재직") @map("hr_status") // 직원구분(재직, 퇴사, 휴직)
+  skillLevel     String    @default("초급") @map("skill_level") // 레벨(초급, 중급, 고급, 특급)
   leaveStartDate DateTime? @map("leave_start_date") @db.Date // 휴직 시작일
   leaveEndDate   DateTime? @map("leave_end_date") @db.Date // 휴직종료일
 
@@ -136,7 +136,7 @@ model EmployeeDetail {
   prevSwExperience  Int?      @default(0) @map("prev_sw_experience") // 전 경력
 
   // 개인 신상
-  maritalStatus     String    @default("SINGLE") @map("marital_status") // 결혼유무
+  maritalStatus     String?   @map("marital_status")
   weddingAnniv      DateTime? @map("wedding_anniv") @db.Date // 결혼기념일
   emergencyPhone    String?   @map("emergency_phone") // 비상연락처
   emergencyRelation String?   @map("emergency_relation") // 본인과의 관계
@@ -146,8 +146,10 @@ model EmployeeDetail {
   address       String? // 주소
   addressDetail String? @map("address_detail") // 상세주소
 
-  remarks     String? @map("remarks") @db.Text // 특이사항
-  profilePath String? @map("profile_path")
+  remarks      String?     @map("remarks") @db.Text // 특이사항
+  profilePath  String?     @map("profile_path")
+  CommonCode   CommonCode? @relation(fields: [commonCodeId], references: [id])
+  commonCodeId Int?
 
   @@map("employee_detail")
 }
@@ -186,7 +188,7 @@ model PreviousExperience {
   department        String?   @map("department") // 근무 부서
   jobLevel          String?   @map("jobLevel") // 최종 직급 (예: 대리, 과장)
   jobRole           String?   @map("job_role") // 담당 직무 (예: 백엔드 개발, QA)
-  relevance         String    @default("RELEVANT") @map("relevance")
+  relevance         String    @default("유관") @map("relevance")
   entranceDate      DateTime  @map("entrance_date") @db.Date // 입사일
   resignationDate   DateTime? @map("resignation_date") @db.Date // 퇴사일
   assignedTask      String?   @map("assigned_task") @db.Text // 담당 업무 상세
@@ -248,7 +250,7 @@ model Customer {
   fax        String? // 팩스
   address    String? // 주소
   homepage   String? // 홈페이지 주소
-  status     String  @default("ACTIVE") @map("status") // 거래상태 (예: 활성-ACTIVE, 비활성-INACTIVE)
+  status     String  @default("활성") @map("status") // 거래상태 (예: 활성-ACTIVE, 비활성-INACTIVE)
   remarks    String? @map("remarks") @db.Text // 비고 (긴 텍스트 대응)
 
   regTime DateTime @default(now()) @map("reg_time")
@@ -464,6 +466,8 @@ model CommonCode {
   name    String   @map("name")
   isUsed  Boolean  @default(true) @map("is_used")
   regTime DateTime @default(now()) @map("reg_time")
+
+  EmployeeDetail EmployeeDetail[]
 
   @@unique([type, code])
   @@map("common_code")

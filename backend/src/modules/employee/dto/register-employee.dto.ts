@@ -168,13 +168,17 @@ export class RegisterEmployeeDto {
   @IsOptional()
   assignStatus?: string;
 
-  @ApiProperty({ description: '직원 유형 코드 (CommonCode)', example: 'REGULAR' })
+  @ApiProperty({ description: '직원 유형 코드 (CommonCode)', example: '정직원' })
   @IsOptional()
   type?: string;
 
-  @ApiProperty({ description: '재직 구분 코드 (CommonCode)', example: 'EMPLOYED' })
+  @ApiProperty({ description: '재직 구분 코드 (CommonCode)', example: '정규직' })
   @IsOptional()
   hrStatus?: string;
+
+  @ApiProperty({ description: '레벨 구분 코드 (CommonCode)', example: '초급' })
+  @IsOptional()
+  skillLevel?: string;
 
   @ApiProperty({ description: '최종 학교', example: '한국대학교' })
   @IsString()
