@@ -1,0 +1,23 @@
+### 1. 전체 사용자 조회
+GET http://localhost:3000/users
+
+### 2. 사용자 생성 (성공 케이스)
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "email": "test123@tbell.co.kr",
+  "name": "홍길동",
+  "position": "대리",
+  "deptId": 1
+}
+
+### 3. 사용자 생성 (검증 실패 케이스 - 이메일 형식 오류)
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "email": "not-email-format",
+  "name": "이",
+  "position": "사원"
+}
