@@ -1,1 +1,0 @@
-alert(`${membersToAdd.length}명의 인력이 추가되었습니다.\\n투입기간: ${commonStartDate} ~ ${commonEndDate}`);

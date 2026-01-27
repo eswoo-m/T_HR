@@ -1,5 +1,0 @@
-                  
-                  alert(`월별 투입 현황이 저장되었습니다.
-평균 투입률: ${averageAllocation}%
-현재 구분: ${updatedClassification}`);
-                  setIsMonthlyAllocationDialogOpen(false);

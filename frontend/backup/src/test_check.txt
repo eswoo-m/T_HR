@@ -1,1 +1,0 @@
-alert(`월별 투입 현황이 저장되었습니다.\n평균 투입률: ${averageAllocation}%`);
