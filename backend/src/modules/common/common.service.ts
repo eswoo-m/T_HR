@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { TeamStructureDto } from 'src/modules/common/dto/team-structure.dto';
-import { OrgChartDto } from 'src/modules/common/dto/org-chart.dto';
+import { PrismaService } from '../../prisma/prisma.service';
+import { TeamStructureDto } from './dto/team-structure.dto';
+import { OrgChartDto } from './dto/org-chart.dto';
 import { Department } from '@prisma/client';
 
 interface DepartmentWithChildren extends Department {

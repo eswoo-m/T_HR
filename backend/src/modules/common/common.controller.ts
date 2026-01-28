@@ -2,6 +2,7 @@ import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { CommonService } from './common.service';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
+
 @ApiTags('Common - 기초 데이터 (조직/코드)')
 @Controller('common')
 export class CommonController {
