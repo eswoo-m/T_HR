@@ -106,7 +106,7 @@ export class EmployeeService {
         });
 
         // 최초 부서 이력 생성
-        await tx.employeeDepartmentHistory.create({
+        await tx.employeeOrganizationHistory.create({
           data: {
             employeeId: employee.id,
             departmentId: dto.departmentId,

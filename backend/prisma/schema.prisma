@@ -32,14 +32,14 @@ model User {
   role     String?
 }
 
-model Department {
+model Organization {
   id   Int    @id @default(autoincrement())
   name String // 부서명
 
   // 조직도 구조 (Self-relation)
-  parentId Int?         @map("parent_id")
-  parent   Department?  @relation("DepartmentToParent", fields: [parentId], references: [id])
-  children Department[] @relation("DepartmentToParent")
+  parentId Int?           @map("parent_id")
+  parent   Organization?  @relation("OrganizationToParent", fields: [parentId], references: [id])
+  children Organization[] @relation("OrganizationToParent")
 
   startDate DateTime  @map("start_date") @db.Date // 조직 신설일
   endDate   DateTime? @default("9999-12-31T00:00:00Z") @map("end_date") @db.Date // 조직 폐쇄일
@@ -48,18 +48,18 @@ model Department {
   // 시스템 기록
   regTime DateTime @default(now()) @map("reg_time") // 등록 시간
 
-  employee              Employee[]
-  historiesAsDepartment EmployeeDepartmentHistory[] @relation("DepartmentRelation")
-  historiesAsTeam       EmployeeDepartmentHistory[] @relation("TeamRelation")
-  employeesAsDepartment Employee[]                  @relation("EmployeeDepartment")
-  employeesAsTeam       Employee[]                  @relation("EmployeeTeam")
-  projectsAsDepartment  Project[]                   @relation("EmployeeDepartment")
-  projectsAsTeam        Project[]                   @relation("EmployeeTeam")
+  employee                Employee[]
+  historiesAsOrganization EmployeeOrganizationHistory[] @relation("DepartmentRelation")
+  historiesAsTeam         EmployeeOrganizationHistory[] @relation("TeamRelation")
+  employeesAsOrganization Employee[]                    @relation("EmployeeDepartment")
+  employeesAsTeam         Employee[]                    @relation("EmployeeTeam")
+  projectsAsOrganization  Project[]                     @relation("EmployeeDepartment")
+  projectsAsTeam          Project[]                     @relation("EmployeeTeam")
 
   @@index([parentId])
   @@index([startDate, endDate])
   @@index([name])
-  @@map("department") // 실제 DB 테이블명
+  @@map("organization") // 실제 DB 테이블명
 }
 
 model Employee {
@@ -88,22 +88,22 @@ model Employee {
   exitDate     DateTime? @map("exit_date") @db.Date // 퇴사일
   phone        String? // 휴대폰번호
 
-  dept       Department? @relation(fields: [deptId], references: [id])
-  department Department? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
-  team       Department? @relation("EmployeeTeam", fields: [teamId], references: [id])
+  dept       Organization? @relation(fields: [deptId], references: [id])
+  department Organization? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
+  team       Organization? @relation("EmployeeTeam", fields: [teamId], references: [id])
 
-  employeeDepartmentHistory EmployeeDepartmentHistory[] // 부서변경 히스토리
-  employeeDetail            EmployeeDetail? // 상세정보
-  assets                    Asset[] // 자산정보
-  projectAssignments        ProjectAssignment[] // 프로젝트 경력
-  employeeMonthlyMms        EmployeeMonthlyMm[] // M/M
-  certificates              Certificate[] // 자격증
-  technicalAbility          TechnicalAbility? // 역량정보
-  employeeTool              EmployeeTool? // 사용하는 툴
-  preProjectAssignments     PreProjectAssignment[] // 과거 프로젝트 경력
-  previousExperiences       PreviousExperience[] // 전직장 경력
-  ownedFiles                Attachment[]                @relation("EmployeeFiles")
-  uploadedFiles             Attachment[]                @relation("UploadedFiles")
+  employeeOrganizationHistory EmployeeOrganizationHistory[] // 부서변경 히스토리
+  employeeDetail              EmployeeDetail? // 상세정보
+  assets                      Asset[] // 자산정보
+  projectAssignments          ProjectAssignment[] // 프로젝트 경력
+  employeeMonthlyMms          EmployeeMonthlyMm[] // M/M
+  certificates                Certificate[] // 자격증
+  technicalAbility            TechnicalAbility? // 역량정보
+  employeeTool                EmployeeTool? // 사용하는 툴
+  preProjectAssignments       PreProjectAssignment[] // 과거 프로젝트 경력
+  previousExperiences         PreviousExperience[] // 전직장 경력
+  ownedFiles                  Attachment[]                  @relation("EmployeeFiles")
+  uploadedFiles               Attachment[]                  @relation("UploadedFiles")
 
   @@index([id])
   @@index([no])
@@ -155,7 +155,7 @@ model EmployeeDetail {
 }
 
 // 부서 이동 히스토리
-model EmployeeDepartmentHistory {
+model EmployeeOrganizationHistory {
   id Int @id @default(autoincrement())
 
   employeeId String   @map("employee_id")
@@ -164,8 +164,8 @@ model EmployeeDepartmentHistory {
   departmentId Int  @map("department_id")
   teamId       Int? @map("team_id")
 
-  department Department  @relation("DepartmentRelation", fields: [departmentId], references: [id])
-  team       Department? @relation("TeamRelation", fields: [teamId], references: [id])
+  department Organization  @relation("DepartmentRelation", fields: [departmentId], references: [id])
+  team       Organization? @relation("TeamRelation", fields: [teamId], references: [id])
 
   jobLevel String? @map("job_level") // 직급 (사원, 대리 등)
   jobRole  String? @map("job_role") // 역할 (팀장, 파트장 등)
@@ -174,7 +174,7 @@ model EmployeeDepartmentHistory {
 
   regTime DateTime @default(now()) @map("reg_time")
 
-  @@map("employee_department_history")
+  @@map("employee_organization_history")
 }
 
 model PreviousExperience {
@@ -368,8 +368,8 @@ model Project {
   departmentId Int? @map("department_id")
   teamId       Int?
 
-  department Department? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
-  team       Department? @relation("EmployeeTeam", fields: [teamId], references: [id])
+  department Organization? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
+  team       Organization? @relation("EmployeeTeam", fields: [teamId], references: [id])
 
   // 기간 및 인원
   regTime   DateTime  @default(now()) @map("reg_time")
