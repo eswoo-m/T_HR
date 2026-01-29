@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterProjectDto } from './dto/register-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
-import { ProjectAssignmentDto } from '../common/dto/project-assignment.dto';
+import { ProjectAssignmentDto } from '@common/dto/project-assignment.dto';
+import { UpdateMemberAssignmentDto } from './dto/update-member-assignment.dto';
+import { formatDate } from '@common/utils/date.util';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -180,7 +182,6 @@ export class ProjectService {
         customer: true,
         projectContacts: {
           include: {
-            // ✅ 2. 조회된 contact_id로 실제 담당자(customer_contact) 정보 추출
             contact: true,
           },
         },
@@ -238,7 +239,8 @@ export class ProjectService {
           department: pa.employee.department?.name || '',
           team: pa.employee.team?.name || '',
           inputRate: inputRate,
-          inputPeriod: `${this.formatDate(period.startDate)} ~ ${this.formatDate(period.endDate)}`,
+          startDate: period.startDate,
+          endDate: period.endDate,
           email: pa.employee.email,
         };
       });
@@ -250,7 +252,8 @@ export class ProjectService {
         id: project.id,
         name: project.name,
         orgText: [project.department?.name, project.team?.name].filter(Boolean).join(' > '),
-        period: `${this.formatDate(project.startDate)} ~ ${this.formatDate(project.endDate)}`,
+        startDate: formatDate(project.startDate),
+        endDate: formatDate(project.startDate),
         status: project.status,
         location: project.location,
         headcount: project.headcount,
@@ -335,8 +338,135 @@ export class ProjectService {
     }
   }
 
-  private formatDate(date: Date | null): string {
-    return date ? date.toISOString().split('T')[0] : '미정';
+  async getMemberAssignmentData(projectId: number, employeeId: string) {
+    try {
+      const data = await this.prisma.projectAssignment.findFirst({
+        where: {
+          projectId: projectId,
+          employeeId: employeeId,
+        },
+        include: {
+          project: true,
+          employee: {
+            include: {
+              department: true,
+              team: true,
+            },
+          },
+          projectAssignmentPeriod: {
+            orderBy: { startDate: 'asc' },
+          },
+        },
+      });
+
+      if (!data) throw new NotFoundException('투입 정보를 찾을 수 없습니다.');
+
+      // 해당 프로젝트 기간 내의 월별 M/M 정보를 별도로 가져옵니다.
+      const monthlyMm = await this.prisma.employeeMonthlyMm.findMany({
+        where: {
+          employeeId: employeeId,
+          // 프로젝트 기간 내 데이터만 필터링 (필요시)
+          yearMonth: {
+            gte: data.startDate.toISOString().substring(0, 7),
+          },
+        },
+        orderBy: { yearMonth: 'asc' },
+      });
+
+      // UI 데이터 매핑
+      return {
+        employee: {
+          id: data.employee.id,
+          name: data.employee.nameKr,
+          jobRole: data.employee.jobRole || '',
+          department: data.employee.department?.name || '-',
+          team: data.employee.team?.name || '-',
+        },
+        project: {
+          id: data.project.id,
+          name: data.project.name,
+          startDate: formatDate(data.startDate),
+          endDate: formatDate(data.startDate),
+        },
+        periods: data.projectAssignmentPeriod.map((p) => ({
+          status: p.status ?? '',
+          startDate: formatDate(p.startDate),
+          endDate: formatDate(p.endDate),
+        })),
+        monthlyMms: monthlyMm.map((m) => ({
+          yearMonth: m.yearMonth,
+          startDate: m.startDate,
+          endDate: m.endDate,
+          assignStatus: m.assignStatus ?? '',
+          mmValue: Number(m.value), // Decimal 타입을 number로 변환
+        })),
+      };
+    } catch (error: unknown) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        throw new BadRequestException(`데이터베이스 요청 오류: ${error.code}`);
+      }
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      console.error(`[Project Assignment Detail Error]: ${errorMessage}`);
+
+      throw new InternalServerErrorException(errorMessage);
+    }
+  }
+
+  async updateMemberAssignment(projectId: number, employeeId: string, updateDto: UpdateMemberAssignmentDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const assignment = await tx.projectAssignment.findFirst({
+        where: { projectId, employeeId },
+        select: { id: true },
+      });
+
+      if (!assignment) {
+        throw new NotFoundException('해당 프로젝트 투입 정보를 찾을 수 없습니다.');
+      }
+
+      const assignmentId = assignment.id;
+
+      // 1. 기존 투입 기간(Periods) 삭제 후 재생성 (Delete-Insert 방식이 가장 안전함)
+      await tx.projectAssignmentPeriod.deleteMany({
+        where: { assignmentId },
+      });
+
+      await tx.projectAssignmentPeriod.createMany({
+        data: updateDto.periods.map((p) => ({
+          assignmentId: assignmentId,
+          status: p.status,
+          startDate: new Date(p.startDate),
+          endDate: p.endDate ? new Date(p.endDate) : null,
+        })),
+      });
+
+      // 2. 월별 M/M 데이터 업데이트
+      // 만약 프론트에서 계산된 monthly 데이터를 보낸다면 그것을 저장
+      // if (updateDto.monthly && updateDto.monthly.length > 0) {
+      //   await tx.employeeMonthlyMm.deleteMany({
+      //     where: { employeeId, projectId }, // 해당 프로젝트 관련 M/M만 삭제
+      //   });
+      //
+      //   await tx.employeeMonthlyMm.createMany({
+      //     data: updateDto.monthly.map((m) => ({
+      //       employeeId,
+      //       projectId,
+      //       yearMonth: m.yearMonth,
+      //       startDate: new Date(m.startDate),
+      //       endDate: new Date(m.endDate),
+      //       assignStatus: m.assignStatus,
+      //       value: m.mmValue, // Decimal로 자동 변환됨
+      //     })),
+      //   });
+      // }
+
+      return { success: true };
+    });
   }
 
   private formatAssignmentData(projectAssignment: ProjectAssignmentDto[]) {

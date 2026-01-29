@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ProjectDto } from '../../../../common/dto/project.dto';
 
 export class CustomerSummaryDto {
   totalCount: number;
@@ -50,16 +51,6 @@ export class ContactDto {
 
   @ApiProperty({ example: true, description: '주담당자 여부' })
   isPrimary: boolean;
-}
-export class ProjectDto {
-  @ApiProperty({ example: 101 })
-  id: number;
-
-  @ApiProperty({ example: '차세대 시스템 구축', description: '프로젝트명' })
-  name: string;
-
-  @ApiProperty({ example: '2023-01-01 ~ 2023-12-31', description: '수행 기간' })
-  period: string;
 }
 
 export class CustomerDetailResponseDto {

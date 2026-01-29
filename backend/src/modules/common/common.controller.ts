@@ -9,8 +9,10 @@ export class CommonController {
   constructor(private readonly commonService: CommonService) {}
 
   // --- 조직 관련 로직 ---
-  @Get('/organizations')
-  @ApiOperation({ summary: '부서/팀 계층 구조 조회', description: '셀렉트박스 및 단순 조직도용' })
+  // --- 조직(Organization) 관련 로직 ---
+
+  @Get('/organizations/chart') // 💡 직관적인 경로 변경
+  @ApiOperation({ summary: '조직 계층 구조 조회', description: '셀렉트박스 및 단순 조직도용' })
   async getOrgChart() {
     return this.commonService.getOrganizationChart(false);
   }
@@ -21,24 +23,24 @@ export class CommonController {
     return this.commonService.getOrganizationChart(true);
   }
 
-  @Get('/organizations/teams/:id/structure')
-  @ApiOperation({ summary: '특정 팀의 하위 조직 및 인원 조회' })
-  async getTeamStructure(@Param('id', ParseIntPipe) id: number) {
-    return this.commonService.getTeamStructure(id);
+  @Get('/organizations/:id/sub-structure') // 💡 teams 대신 id를 사용하여 범용성 확보
+  @ApiOperation({ summary: '특정 조직의 하위 조직 및 인원 조회' })
+  async getOrganizationStructure(@Param('id', ParseIntPipe) id: number) {
+    return this.commonService.getOrganizationStructure(id);
   }
 
-  // 1. 부서 전체 목록 조회 (첫 번째 셀렉트박스용)
-  @Get('departments')
-  @ApiOperation({ summary: '부서 전체 목록 조회' })
-  async getDepartments() {
-    return this.commonService.getDepartments();
+  // 1. 최상위 조직(부서) 목록 조회 (첫 번째 셀렉트박스용)
+  @Get('/organizations/roots') // 💡 명칭 변경: departments -> organizations/roots
+  @ApiOperation({ summary: '최상위 부서 목록 조회' })
+  async getRootOrganizations() {
+    return this.commonService.getRootOrganizations();
   }
 
-  // 2. 특정 부서에 속한 팀 목록 조회 (두 번째 셀렉트박스 연동용)
-  @Get('departments/:deptId/teams')
-  @ApiOperation({ summary: '부서별 팀 목록 조회' })
-  async getTeams(@Param('deptId', ParseIntPipe) deptId: number) {
-    return this.commonService.getTeamsByDept(deptId);
+  // 2. 특정 조직의 하위 조직 목록 조회 (두 번째 셀렉트박스 연동용)
+  @Get('/organizations/:parentId/children') // 💡 명칭 변경: 부서별 팀 -> 부모별 자식
+  @ApiOperation({ summary: '상위 조직별 하위 조직(팀) 목록 조회' })
+  async getSubOrganizations(@Param('parentId', ParseIntPipe) parentId: number) {
+    return this.commonService.getSubOrganizations(parentId);
   }
 
   // --- 공통 코드 관련 로직 ---

@@ -1,9 +1,12 @@
 import { Controller, Post, Body, Get, HttpCode, HttpStatus, Param, Query, ParseIntPipe, Patch } from '@nestjs/common';
-import { ApiResponse, ApiOkResponse, ApiQuery, ApiOperation, ApiTags, ApiCreatedResponse, ApiConflictResponse, ApiBadRequestResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
+import { ApiResponse, ApiParam, ApiOkResponse, ApiQuery, ApiOperation, ApiTags, ApiCreatedResponse, ApiConflictResponse, ApiBadRequestResponse, ApiInternalServerErrorResponse } from '@nestjs/swagger';
 import { ProjectService } from './project.service';
 import { RegisterProjectDto } from './dto/register-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { UpdateMemberAssignmentDto } from './dto/update-member-assignment.dto';
+import { GetMemberAssignmentlDto } from './dto/get-member-assignment.dto';
+import { MemberAssignmentResponseDto } from './dto/member-assignment-response.dto';
 
 @ApiTags('프로젝트')
 @Controller('projects')
@@ -50,7 +53,7 @@ export class ProjectController {
               endDate: '2026-12-31',
               amount: 500000000,
               memberCount: 5,
-              createdAt: '2026-01-22T10:17:00Z',
+              regTime: '2026-01-22T10:17:00Z',
             },
           ],
           meta: {
@@ -116,5 +119,35 @@ export class ProjectController {
   @ApiResponse({ status: 200, description: '수정 성공' })
   async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateProjectDto) {
     return await this.projectService.update(id, dto);
+  }
+
+  @Get('assign-detail')
+  @ApiOperation({
+    summary: '프로젝트 투입 인력 상세 조회 (팝업용)',
+    description: '특정 프로젝트에 투입된 인력의 상세 정보, 투입 기간, 월별 M/M 현황을 조회합니다.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '조회 성공',
+    type: MemberAssignmentResponseDto,
+  })
+  async getMemberAssignment(@Query() query: GetMemberAssignmentlDto): Promise<MemberAssignmentResponseDto> {
+    return this.projectService.getMemberAssignmentData(query.projectId, query.employeeId);
+  }
+
+  @Patch(':projectId/members/:employeeId')
+  @ApiOperation({
+    summary: '프로젝트 투입 인력 상세 수정 (팝업용)',
+    description: '특정 프로젝트에 투입된 인력의 상세 정보, 투입 기간, 월별 M/M 현황을 수정합니다.',
+  })
+  @ApiParam({ name: 'projectId', description: '프로젝트 ID', example: 1 })
+  @ApiParam({ name: 'employeeId', description: '사원 ID', example: 'kd.hong' })
+  @ApiResponse({
+    status: 200,
+    description: '수정 성공',
+  })
+  @ApiResponse({ status: 400, description: '잘못된 요청 데이터' })
+  async updateMemberAssignment(@Param('projectId', ParseIntPipe) projectId: number, @Param('employeeId') employeeId: string, @Body() updateDto: UpdateMemberAssignmentDto) {
+    return await this.projectService.updateMemberAssignment(projectId, employeeId, updateDto);
   }
 }

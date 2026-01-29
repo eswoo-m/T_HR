@@ -1,21 +1,29 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { TeamStructureDto } from './dto/team-structure.dto';
-import { OrgChartDto } from './dto/org-chart.dto';
-import { Department } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { TeamStructureDto } from 'src/modules/common/dto/team-structure.dto';
+import { OrgChartDto } from 'src/modules/common/dto/org-chart.dto';
 
-interface DepartmentWithChildren extends Department {
-  level: number;
-  children?: DepartmentWithChildren[];
-  employee?: any[];
-}
+// interface OrganizationWithChildren extends Organization {
+//   level: number;
+//   children?: OrganizationWithChildren[];
+//   employee?: any[];
+// }
+
+type OrganizationWithMembers = Prisma.OrganizationGetPayload<{
+  include: {
+    employee: {
+      select: { id: true; nameKr: true; jobRole: true };
+    };
+  };
+}>;
 
 @Injectable()
 export class CommonService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getTeamStructure(teamId: number): Promise<TeamStructureDto> {
-    const team = await this.prisma.department.findUnique({
+  async getOrganizationStructure(teamId: number): Promise<TeamStructureDto> {
+    const team = await this.prisma.organization.findUnique({
       where: { id: teamId },
       include: {
         // 1. 하위 팀(Children) 조회
@@ -72,22 +80,8 @@ export class CommonService {
   // 조직도
   async getOrganizationChart(includeMembers: boolean): Promise<OrgChartDto[]> {
     try {
-      const departments = (await this.prisma.department.findMany({
-        where: { parentId: null },
+      const rawOrgs = await this.prisma.organization.findMany({
         include: {
-          children: {
-            include: {
-              employee: includeMembers
-                ? {
-                    where: { employeeDetail: { is: { hrStatus: 'ACTIVE' } } },
-                    select: { id: true, nameKr: true, jobRole: true },
-                  }
-                : false,
-              children: true, // 필요 깊이만큼 추가
-            },
-          },
-
-          // 최상위 조직의 멤버 포함 여부
           employee: includeMembers
             ? {
                 where: { employeeDetail: { is: { hrStatus: 'ACTIVE' } } },
@@ -95,40 +89,66 @@ export class CommonService {
               }
             : false,
         },
-      })) as DepartmentWithChildren[];
+      });
 
-      const formatOrg = (dept: DepartmentWithChildren, currentLevel: number): OrgChartDto => {
+      const allOrgs = rawOrgs as unknown as OrganizationWithMembers[];
+      const orgMap = new Map<number, OrgChartDto>();
+
+      for (const org of allOrgs) {
         const node: OrgChartDto = {
-          id: dept.id,
-          name: dept.name,
-          level: currentLevel,
-          children:
-            dept.children && dept.children.length > 0
-              ? dept.children.map((child) => formatOrg(child, currentLevel + 1)) // ✅ 자식은 현재 레벨 + 1
-              : [],
+          id: org.id,
+          name: org.name,
+          level: 0,
+          children: [],
+          members:
+            includeMembers && org.employee
+              ? org.employee.map((emp) => ({
+                  id: emp.id,
+                  nameKr: emp.nameKr,
+                  jobRole: emp.jobRole ?? '',
+                }))
+              : undefined,
         };
+        orgMap.set(org.id, node);
+      }
 
-        if (includeMembers && Array.isArray(dept.employee)) {
-          node.members = dept.employee.map((emp: { id: number; nameKr: string; jobRole: string }) => ({
-            id: emp.id,
-            nameKr: emp.nameKr,
-            jobRole: emp.jobRole,
-          }));
+      const rootNodes: OrgChartDto[] = [];
+      allOrgs.forEach((org) => {
+        const currentNode = orgMap.get(org.id)!;
+
+        if (org.parentId === null) {
+          // 최상위 노드인 경우 루트 배열에 추가
+          rootNodes.push(currentNode);
+        } else {
+          // 부모가 있는 경우, Map에서 부모를 찾아 그 자식 배열에 현재 노드를 push
+          const parentNode = orgMap.get(org.parentId);
+          if (parentNode) {
+            parentNode.children!.push(currentNode);
+          }
         }
+      });
 
-        return node;
+      // 5. 재귀 함수를 이용해 레벨(level)을 정확히 계산
+      const setLevel = (nodes: OrgChartDto[], level: number) => {
+        nodes.forEach((node) => {
+          node.level = level;
+          if (node.children && node.children.length > 0) {
+            setLevel(node.children, level + 1);
+          }
+        });
       };
 
-      // 최초 호출 시 level 1 부여
-      return departments.map((dept) => formatOrg(dept, 1));
+      setLevel(rootNodes, 1);
+
+      return rootNodes;
     } catch (error: unknown) {
       throw new InternalServerErrorException(error instanceof Error ? error.message : '조직도 조회 중 오류');
     }
   }
 
   // 팀 목록: 선택된 부서 ID로 필터링
-  async getDepartments() {
-    return this.prisma.department.findMany({
+  async getRootOrganizations() {
+    return this.prisma.organization.findMany({
       where: { parentId: { not: null }, parent: { parentId: null } },
       // where: {
       //   // 1. 최상위(회사) 제외
@@ -143,8 +163,8 @@ export class CommonService {
     });
   }
 
-  async getTeamsByDept(deptId: number) {
-    const department = await this.prisma.department.findUnique({
+  async getSubOrganizations(deptId: number) {
+    const department = await this.prisma.organization.findUnique({
       where: { id: deptId },
       select: {
         children: {
@@ -166,14 +186,14 @@ export class CommonService {
    * 예: getCodesByType('RANK') -> 대리, 과장, 차장...
    */
   async getCodesByType(type: string) {
-    return await this.prisma.commonCode.findMany({
+    return this.prisma.commonCode.findMany({
       where: {
         type,
-        isUsed: true // 사용 중인 코드만 필터링
+        isUsed: true, // 사용 중인 코드만 필터링
       },
       select: {
         code: true,
-        name: true
+        name: true,
       },
       orderBy: { id: 'asc' }, // 혹은 정렬용 별도 컬럼이 있다면 그것을 사용
     });
@@ -183,7 +203,7 @@ export class CommonService {
    * 여러 타입의 코드를 한 번에 조회 (화면 초기 로딩 최적화용)
    */
   async getCodesByTypes(types: string[]) {
-    return await this.prisma.commonCode.findMany({
+    return this.prisma.commonCode.findMany({
       where: {
         type: { in: types },
         isUsed: true,

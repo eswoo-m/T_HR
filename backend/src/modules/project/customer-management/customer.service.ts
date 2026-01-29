@@ -133,7 +133,8 @@ export class CustomerService {
       projects: customer.projects.map((p) => ({
         id: p.id,
         name: p.name,
-        period: `${formatDate(p.startDate)} ~ ${p.endDate ? formatDate(p.endDate) : '진행중'}`,
+        startDate: formatDate(p.startDate),
+        endDate: formatDate(p.endDate),
       })),
     };
     return result;
