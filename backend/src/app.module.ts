@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import configuration from './config/env.config';
 import databaseConfig from './config/database.config';
-import { CommonModule } from './modules/common/common.module';
+import { CommonModule } from '@modules/common/common.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { EmployeeModule } from './modules/employee/employee.module';
-import { ProjectModule } from './modules/project/project.module';
+import { EmployeeModule } from '@modules/employee/employee.module';
+import { ProjectModule } from '@modules/project/project.module';
+import { OrganizationModule } from '@modules/organization/organization.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ProjectModule } from './modules/project/project.module';
     PrismaModule,
     EmployeeModule,
     ProjectModule,
+    OrganizationModule,
   ],
 })
 export class AppModule {}

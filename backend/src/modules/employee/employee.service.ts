@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { getKstDate } from '../../common/utils/date.util';
+import { getKstDate } from '@common/utils/date.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterEmployeeDto } from './dto/register-employee.dto';
 import { QueryEmployeeDto, CareerRange } from './dto/query-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
-import { calculateTotalCareerMonths } from '../../common/utils/date.util';
-import { getErrorMessage } from '../../common/utils/error.util';
+import { calculateTotalCareerMonths } from '@common/utils/date.util';
+import { getErrorMessage } from '@common/utils/error.util';
 
 import * as bcrypt from 'bcrypt';
 
@@ -154,7 +154,7 @@ export class EmployeeService {
               await tx.attachment.create({
                 data: {
                   employeeId: employee.id, // 사원 PK (누구의 파일인가)
-                  uploaderId: adminId, // 관리자 PK (누가 올렸는가)
+                  uploaderId: employee.id, // 관리자 PK (누가 올렸는가)
                   certificateId: newCert.id, // 자격증 PK (어떤 자격증의 파일인가)
 
                   fileType: 'CERTIFICATE',

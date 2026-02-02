@@ -22,12 +22,12 @@ export class QueryCustomerDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?: number = 1;
+  page?;
 
-  @ApiPropertyOptional({ description: '페이지당 노출 개수', default: 10 })
+  @ApiPropertyOptional({ description: '페이지당 노출 개수', default: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  limit?: number = 10;
+  limit?;
 }

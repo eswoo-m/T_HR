@@ -6,7 +6,7 @@ import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter'; // 경로 확인 필요
+import { HttpExceptionFilter } from '@common/filters/http-exception.filter'; // 경로 확인 필요
 
 async function bootstrap() {
   const logDir = 'logs';

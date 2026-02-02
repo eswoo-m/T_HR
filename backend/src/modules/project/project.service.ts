@@ -14,7 +14,7 @@ export class ProjectService {
 
   async register(dto: RegisterProjectDto) {
     // 1. 구조 분해 할당 확인 (contacts로 통합해서 받기로 한 경우)000
-    const { customerId, name, amount, location, taskName, taskSummary, remarks, startDate, endDate, departmentId, teamId, contacts, projectAssignment } = dto;
+    const { customerId, name, amount, location, taskName, taskSummary, remarks, startDate, endDate, teamId, contacts, projectAssignment } = dto;
 
     // 2. 고객사 존재 여부 확인
     if (customerId) {
@@ -61,7 +61,6 @@ export class ProjectService {
           endDate: endDate ? new Date(endDate) : null,
 
           customer: { connect: { id: customerId } },
-          department: departmentId ? { connect: { id: departmentId } } : undefined,
           team: teamId ? { connect: { id: teamId } } : undefined,
 
           // 담당자 연결/생성
@@ -69,12 +68,10 @@ export class ProjectService {
             create: projectContactData,
           },
 
-          // ✅ 인력 및 상세 투입 기간(Period) 계층적 생성
           projectAssignment: projectAssignment?.length ? this.formatAssignmentData(projectAssignment) : undefined,
         },
         include: {
           customer: true,
-          department: true,
           team: true,
           projectAssignment: {
             include: {
@@ -88,110 +85,113 @@ export class ProjectService {
     });
   }
 
-  async query(query: QueryProjectsDto) {
-    const page = query.page || 1;
-    const limit = query.limit || 10;
-    const { keyword, departmentId, teamId, status } = query;
+  async query(dto: QueryProjectsDto) {
+    const { keyword, departmentId, teamId, status, minHeadcount, maxHeadcount, startDate, endDate, minAmount, maxAmount } = dto;
 
-    // 1. 페이지네이션 계산
-    const skip = (page - 1) * limit;
-
-    // 2. 동적 WHERE 조건 구성
     const where: Prisma.ProjectWhereInput = {
       AND: [
-        // 1. 키워드 검색 (OR 조건)
         ...(keyword
           ? [
               {
-                OR: [
-                  { name: { contains: keyword, mode: 'insensitive' as const } },
-                  {
-                    customer: {
-                      name: { contains: keyword, mode: 'insensitive' as const },
-                    },
-                  },
-                ],
+                OR: [{ name: { contains: keyword, mode: 'insensitive' as const } }, { customer: { name: { contains: keyword, mode: 'insensitive' as const } } }],
               },
             ]
           : []),
 
-        // 2. 부서/팀/상태 셀렉트 박스
-        ...(departmentId ? [{ departmentId }] : []),
-        ...(teamId ? [{ teamId }] : []),
+        // 2. 부서 및 팀 필터 (Organization 관계 활용)
+        ...(teamId ? [{ teamId: teamId }] : []),
+        ...(departmentId && !teamId
+          ? [
+              {
+                team: {
+                  OR: [{ id: departmentId }, { parentId: departmentId }],
+                },
+              },
+            ]
+          : []),
+
+        // 3. 진행 단계(상태)
         ...(status ? [{ status }] : []),
+
+        // 4. 투입 인원 범위 검색
+        ...(minHeadcount !== undefined || maxHeadcount !== undefined
+          ? [
+              {
+                headcount: {
+                  gte: minHeadcount ?? 0,
+                  ...(maxHeadcount && { lte: maxHeadcount }),
+                },
+              },
+            ]
+          : []),
+
+        // 5. 날짜 범위 검색 (프로젝트 기간 내 포함 여부)
+        ...(startDate ? [{ startDate: { gte: new Date(startDate) } }] : []),
+        ...(endDate ? [{ endDate: { lte: new Date(endDate) } }] : []),
+
+        // 6. 예산(계약금) 범위 검색
+        ...(minAmount !== undefined || maxAmount !== undefined
+          ? [
+              {
+                amount: {
+                  gte: minAmount ?? 0,
+                  ...(maxAmount && { lte: maxAmount }),
+                },
+              },
+            ]
+          : []),
       ],
     };
 
-    try {
-      const [total, items] = await this.prisma.$transaction([
-        this.prisma.project.count({ where }),
-        this.prisma.project.findMany({
-          where,
-          skip,
-          take: limit,
-          include: {
-            customer: { select: { name: true } },
-            department: { select: { name: true } },
-            team: { select: { name: true } },
-            _count: {
-              select: { projectContacts: true },
-            },
+    const projects = await this.prisma.project.findMany({
+      where,
+      include: {
+        customer: { select: { name: true } },
+        team: {
+          select: {
+            name: true,
+            parent: { select: { name: true } }, // 부서명을 가져오기 위해 상위 조직 포함
           },
-          orderBy: { regTime: 'desc' },
-        }),
-      ]);
-
-      const formattedItems = items.map((item) => {
-        const deptName = item.department?.name || '';
-        const teamName = item.team?.name || '';
-
-        return {
-          id: item.id,
-          name: item.name,
-          amount: item.amount,
-          displayOrg: [deptName, teamName].filter(Boolean).join(' / '),
-          customerName: item.customer?.name || '미지정',
-          status: item.status,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          memberCount: item._count.projectContacts,
-          regTime: item.regTime,
-        };
-      });
-
-      return {
-        items: formattedItems,
-        meta: {
-          total,
-          page,
-          lastPage: Math.ceil(total / limit),
         },
-      };
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('목록 조회 중 오류가 발생했습니다.');
-    }
+      },
+      orderBy: { regTime: 'desc' },
+    });
+
+    // 데이터 가공: 목록 구성 (프로젝트명, 고객사, 부서명, 팀명, 상태, 기간, 예산, 인력)
+    return projects.map((p) => ({
+      id: p.id,
+      projectName: p.name,
+      customerName: p.customer?.name ?? '-',
+      // 부서명/팀명 구분 로직
+      departmentName: p.team?.parent?.name ?? p.team?.name ?? '-',
+      teamName: p.team?.parent ? p.team.name : '-',
+      status: p.status,
+      period: `${p.startDate?.toISOString().split('T')[0] ?? ''} ~ ${p.endDate?.toISOString().split('T')[0] ?? '진행중'}`,
+      amount: p.amount,
+      headcount: p.headcount,
+    }));
   }
 
   async get(id: number) {
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: {
-        department: { select: { name: true } },
-        team: { select: { name: true } },
-        customer: true,
-        projectContacts: {
+        team: {
           include: {
-            contact: true,
+            parent: { select: { name: true } },
           },
         },
-
+        customer: true,
+        projectContacts: {
+          include: { contact: true },
+        },
         projectAssignment: {
           include: {
             employee: {
               include: {
-                department: { select: { name: true } },
-                team: { select: { name: true } },
+                team: {
+                  include: { parent: { select: { name: true } } },
+                },
               },
             },
             projectAssignmentPeriod: {
@@ -199,15 +199,12 @@ export class ProjectService {
             },
           },
         },
-
-        // 인원수는 이제 projectAssignments의 개수를 세어야 합니다.
         _count: { select: { projectAssignment: true } },
       },
     });
 
     if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
 
-    // 1. 프로젝트 전체 기간(일수) 계산 함수
     const getDaysBetween = (start: Date | string, end: Date | string) => {
       const s = new Date(start);
       const e = new Date(end);
@@ -217,12 +214,11 @@ export class ProjectService {
 
     const totalProjectDays = getDaysBetween(project.startDate ?? new Date(), project.endDate || new Date());
 
-    const allMemberHistory = project.projectAssignment.flatMap((pa) => {
+    const allMemberHistory = (project.projectAssignment || []).flatMap((pa) => {
       const periods = pa.projectAssignmentPeriod || [];
 
       return periods.map((period) => {
         let inputRate = 0;
-
         if (period.endDate) {
           const periodDays = getDaysBetween(period.startDate, period.endDate);
           inputRate = totalProjectDays > 0 ? Math.round((periodDays / totalProjectDays) * 100) : 0;
@@ -236,9 +232,9 @@ export class ProjectService {
           assignmentStatus: period.status || '미정',
           assignedRole: pa.assignedRole,
           jobRole: pa.employee.jobRole,
-          department: pa.employee.department?.name || '',
+          department: pa.employee.team?.parent?.name || '',
           team: pa.employee.team?.name || '',
-          inputRate: inputRate,
+          inputRate,
           startDate: period.startDate,
           endDate: period.endDate,
           email: pa.employee.email,
@@ -247,13 +243,15 @@ export class ProjectService {
     });
 
     allMemberHistory.sort((a, b) => a.name.localeCompare(b.name));
+
+    // 3. 최종 반환 객체
     return {
       basicInfo: {
         id: project.id,
         name: project.name,
-        orgText: [project.department?.name, project.team?.name].filter(Boolean).join(' > '),
-        startDate: formatDate(project.startDate),
-        endDate: formatDate(project.startDate),
+        orgText: [project.team?.parent?.name, project.team?.name].filter(Boolean).join(' > '),
+        startDate: project.startDate,
+        endDate: project.endDate,
         status: project.status,
         location: project.location,
         headcount: project.headcount,
@@ -277,7 +275,7 @@ export class ProjectService {
   }
 
   async update(id: number, dto: UpdateProjectDto) {
-    const { endDate, status, departmentId, teamId, location, taskSummary, remarks, projectAssignment } = dto;
+    const { endDate, status, teamId, location, taskSummary, remarks, projectAssignment } = dto;
 
     try {
       return this.prisma.$transaction(async (tx) => {
@@ -305,20 +303,17 @@ export class ProjectService {
         return tx.project.update({
           where: { id },
           data: {
-            departmentId: departmentId ?? undefined,
             teamId: teamId ?? undefined,
             status: status ?? undefined,
             location: location ?? undefined,
             taskSummary: taskSummary ?? undefined,
             remarks: remarks ?? undefined,
-            // 종료일 처리 (null이면 삭제, 값이 있으면 변환)
             endDate: endDate ? new Date(endDate) : endDate === null ? null : undefined,
 
             // ✅ 공통 DTO 구조를 활용한 중첩 생성(Nested Create)
             projectAssignment: isMembersUpdated ? this.formatAssignmentData(projectAssignment) : undefined,
           },
           include: {
-            department: true,
             team: true,
             projectAssignment: {
               include: {

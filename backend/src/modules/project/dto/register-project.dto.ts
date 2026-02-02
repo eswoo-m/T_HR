@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsInt, IsString, IsDateString, IsNumber, IsArray, ValidateNested } from 'class-validator';
 import { CustomerContactDto } from '../../common/dto/contact.dto';
-import { ProjectAssignmentDto } from '../../../common/dto/project-assignment.dto';
+import { ProjectAssignmentDto } from '@common/dto/project-assignment.dto';
 import { Type } from 'class-transformer';
 
 export class RegisterProjectDto {
