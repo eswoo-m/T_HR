@@ -1,9 +1,4 @@
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  HttpException,
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { BaseException } from '../exceptions/base.exception';
 

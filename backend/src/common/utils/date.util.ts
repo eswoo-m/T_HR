@@ -33,3 +33,26 @@ export const parseDate = (dateStr: string | null | undefined): Date | null => {
   const parsed = dayjs(dateStr);
   return parsed.isValid() ? parsed.toDate() : null;
 };
+
+/** 특정 날짜에서 n일을 뺀 Date 객체를 반환 */
+export const subtractDays = (date: Date | string, days: number = 1): Date => {
+  return dayjs(date).subtract(days, 'day').toDate();
+};
+
+/** 특정 날짜에서 n일을 더한 Date 객체를 반환 */
+export const addDays = (date: Date | string, days: number = 1): Date => {
+  return dayjs(date).add(days, 'day').toDate();
+};
+
+/**
+ * DB(UTC) 저장 시 타임존 차이로 인해 날짜가 하루 전으로 밀리는 현상을 방지합니다.
+ * 시간을 낮 12시로 고정하여 UTC 변환 후에도 날짜가 유지되도록 합니다.
+ */
+export const toSafeDate = (date: Date | string): Date => {
+  return dayjs(date).hour(12).minute(0).second(0).toDate();
+};
+
+// 기존에 만든 연산 함수들도 이 safe 로직을 타게 하면 더 좋습니다.
+export const subtractDaysSafe = (date: Date | string, days: number = 1): Date => {
+  return dayjs(date).subtract(days, 'day').hour(12).toDate();
+};

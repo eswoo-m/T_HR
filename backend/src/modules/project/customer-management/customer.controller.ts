@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe, Patch, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, ParseIntPipe, Patch, Delete, Query } from '@nestjs/common';
 import { ApiCreatedResponse, ApiConflictResponse, ApiInternalServerErrorResponse, ApiTags, ApiOperation, ApiResponse, ApiOkResponse, ApiNotFoundResponse, ApiBadRequestResponse, ApiParam } from '@nestjs/swagger';
 import { CustomerService } from './customer.service';
 import { QueryCustomerDto } from './dto/query-customer.dto';
@@ -21,16 +21,16 @@ export class CustomerController {
     return this.customerService.register(dto);
   }
 
-  @Get()
+  @Get('list')
   @ApiOperation({ summary: '고객사 관리 목록' })
   @ApiResponse({ status: 200, description: '고객사 목록 및 요약 데이터 조회 성공', type: CustomerListWithSummaryResponseDto })
   @ApiResponse({ status: 400, description: '잘못된 요청 파라미터' })
   @ApiResponse({ status: 500, description: '서버 오류 발생' })
-  async query(dto: QueryCustomerDto): Promise<CustomerListWithSummaryResponseDto> {
+  async query(@Query() dto: QueryCustomerDto): Promise<CustomerListWithSummaryResponseDto> {
     return this.customerService.query(dto);
   }
 
-  @Get(':id')
+  @Get('detail/:id')
   @ApiOperation({ summary: '고객사 상세 조회', description: '고객사의 기본 정보와 담당자 목록, 프로젝트 이력을 상세조회합니다.' })
   @ApiOkResponse({ description: '상세 정보 조회 성공', type: CustomerDetailResponseDto })
   @ApiNotFoundResponse({ description: '존재하지 않는 고객사 ID입니다.' })

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { QueryCustomerDto } from './dto/query-customer.dto';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
@@ -145,6 +145,14 @@ export class CustomerService {
 
     // 트랜잭션 시작
     return this.prisma.$transaction(async (tx) => {
+      const existingCustomer = await tx.customer.findUnique({
+        where: { businessNo: dto.businessNo }, // 스키마 필드명 확인 (businessNo 또는 business_no)
+      });
+
+      if (existingCustomer) {
+        throw new ConflictException('이미 등록된 사업자등록번호입니다.');
+      }
+
       // 1. 고객사 기본 정보 생성
       const customer = await tx.customer.create({
         data: {

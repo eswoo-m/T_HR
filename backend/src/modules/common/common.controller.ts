@@ -8,7 +8,6 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 export class CommonController {
   constructor(private readonly commonService: CommonService) {}
 
-  // --- 조직 관련 로직 ---
   // --- 조직(Organization) 관련 로직 ---
 
   @Get('/organizations/chart') // 💡 직관적인 경로 변경

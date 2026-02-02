@@ -180,6 +180,11 @@ export class RegisterEmployeeDto {
   @IsOptional()
   skillLevel?: string;
 
+  @ApiPropertyOptional({ description: '최종 학력 (박사, 석사, 학사, 전문학사, 고졸)', example: '학사' })
+  @IsString()
+  @IsOptional()
+  eduLevel?: string;
+
   @ApiProperty({ description: '최종 학교', example: '한국대학교' })
   @IsString()
   @IsOptional()
