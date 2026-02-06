@@ -6,12 +6,16 @@ import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { HttpExceptionFilter } from '@common/filters/http-exception.filter'; // 경로 확인 필요
+import { HttpExceptionFilter } from '@common/filters/http-exception.filter'; 
+// ✅ [추가 1] 정적 파일 경로 설정을 위한 join 함수 임포트
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const logDir = 'logs';
 
-  // 1. 로그 포맷 설정
+  // 1. 로그 포맷 설정 (기존 유지)
   const fileFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.printf(({ timestamp, level, message }: any) => {
@@ -28,7 +32,8 @@ async function bootstrap() {
   );
 
   // 2. Nest 애플리케이션 생성
-  const app = await NestFactory.create(AppModule, {
+  // ✅ [추가 2] 제네릭 <NestExpressApplication>을 추가하여 Express 전용 기능 활성화
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger({
       transports: [
         new winston.transports.Console({ format: consoleFormat }),
@@ -54,11 +59,22 @@ async function bootstrap() {
     }),
   });
 
+  // 요청 본문(Body) 크기 제한을 50MB로 증가 (사진 업로드 필수)
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
+
   // 3. 전역 설정 (CORS, Pipe, Filter)
   app.enableCors({
-    origin: 'http://localhost:5173',
+    origin: 'http://localhost:5173', // 프론트엔드 주소 (기존 유지)
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
+  });
+
+  // ✅ [추가 3] 정적 파일 서빙 설정 (이미지 보기 기능)
+  // 프로젝트 루트(process.cwd())의 'public' 폴더를 웹 루트('/')에 연결
+  // 예: 서버주소/uploads/profiles/사진.jpg 로 접근 가능
+  app.useStaticAssets(join(process.cwd(), 'public'), {
+    prefix: '/',
   });
 
   app.useGlobalPipes(
@@ -79,8 +95,13 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // 4. Swagger 설정
-  const config = new DocumentBuilder().setTitle('T_HR').setDescription('The T_HR API description').setVersion('1.0').addBearerAuth({ type: 'http', scheme: 'bearer', name: 'JWT', in: 'header' }, 'access-token').build();
+  // 4. Swagger 설정 (기존 유지)
+  const config = new DocumentBuilder()
+    .setTitle('T_HR')
+    .setDescription('The T_HR API description')
+    .setVersion('1.0')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', name: 'JWT', in: 'header' }, 'access-token')
+    .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);

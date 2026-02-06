@@ -237,6 +237,12 @@ export class RegisterEmployeeDto {
   @IsOptional()
   profilePath?: string;
 
+  // 사진 인코딩 위해 진빈 추가 내용 <<
+  @ApiPropertyOptional({ description: 'Base64 인코딩된 프로필 이미지 문자열' })
+  @IsString()
+  @IsOptional()
+  profileImageBase64?: string;
+
   @ApiPropertyOptional({ description: '할당할 자산 ID 목록', example: '[1, 5, 10]' })
   @IsArray()
   @IsInt({ each: true })

@@ -1,3 +1,5 @@
+// src/modules/employee/employee.service.ts
+
 import { Injectable } from '@nestjs/common';
 import { ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -9,6 +11,8 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
 import { calculateTotalCareerMonths } from '@common/utils/date.util';
 import { getErrorMessage } from '@common/utils/error.util';
+// ✅ 파일 업로드 유틸리티 임포트 확인
+import { saveProfileImage } from '@common/utils/file-upload.util';
 
 import * as bcrypt from 'bcrypt';
 
@@ -56,6 +60,18 @@ export class EmployeeService {
       throw new ConflictException('이미 등록된 주민번호입니다.');
     }
 
+    // 사진추가 위한 진빈 추가내용
+    // 1. 기본적으로 DTO에 경로가 있다면 그것을 사용 (직접 경로 입력 시)
+    let savedProfilePath = dto.profilePath; 
+    
+    // 2. Base64 데이터가 있다면 파일로 저장 후 경로 덮어쓰기
+    if (dto.profileImageBase64) {
+      const uploadedPath = saveProfileImage(dto.profileImageBase64, dto.no);
+      if (uploadedPath) {
+        savedProfilePath = uploadedPath; 
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     return this.prisma.$transaction(async (tx) => {
@@ -93,19 +109,19 @@ export class EmployeeService {
             hrStatus: dto.hrStatus || '재직',
             skillLevel: dto.skillLevel || '초급',
             
-            // ✅ [추가됨] 최종 학력 저장
+            // 학력 정보
             eduLevel: dto.eduLevel,
-
             lastSchool: dto.lastSchool,
             major: dto.major,
-            // previousExperiences: dto.previousExperiences,
-            // certificates: dto.certificates,
+
             maritalStatus: dto.maritalStatus,
             totalSwExperience: dto.totalSwExperience || 0,
             zipCode: dto.zipCode,
             address: dto.address,
             addressDetail: dto.addressDetail,
-            profilePath: dto.profilePath,
+            
+            // ✅ [수정됨] 위에서 처리한 이미지 경로 저장
+            profilePath: savedProfilePath,
           },
         });
 
@@ -304,7 +320,7 @@ export class EmployeeService {
           type: dto.type,
           hrStatus: dto.hrStatus,
           
-          // ✅ [추가됨] 최종 학력 수정
+          // 최종 학력 수정
           eduLevel: dto.eduLevel,
 
           lastSchool: dto.lastSchool,
