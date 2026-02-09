@@ -1,27 +1,20 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// 1. 클라이언트 및 ERD 생성기 설정
+generator client {
+  provider = "prisma-client-js"
+}
 
 generator erd {
   provider = "prisma-erd-generator"
   output   = "./ERD.pdf"
 }
 
-// 1. 클라이언트 생성기 (이 부분이 빠지면 Wasm 에러가 날 수 있습니다)
-generator client {
-  provider = "prisma-client-js"
-}
-
 // 2. DB 연결 설정
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // directUrl = env("DATABASE_URL")
 }
 
-// 3. 모델 정의 (우리가 만든 구조)
+// 3. 모델 정의
 
 model User {
   id       Int     @id @default(autoincrement())
@@ -34,76 +27,78 @@ model User {
 }
 
 model Organization {
-  id   Int    @id @default(autoincrement())
-  name String // 부서명
+  id        Int       @id @default(autoincrement())
+  name      String
+  parentId  Int?      @map("parent_id")
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @default(dbgenerated("'9999-12-31'::date")) @map("end_date") @db.Date
+  desc      String?
+  regTime   DateTime  @default(now()) @map("reg_time")
+
+  // ✅ 서비스 코드 호환용 별칭 (projects, employee)
+  projects Project[]  @relation("OrganizationToProject")
+  employee Employee[] @relation("EmployeeToOrganization")
 
   // 조직도 구조 (Self-relation)
-  parentId Int?           @map("parent_id")
   parent   Organization?  @relation("OrganizationToParent", fields: [parentId], references: [id])
   children Organization[] @relation("OrganizationToParent")
 
-  startDate DateTime  @map("start_date") @db.Date // 조직 신설일
-  endDate   DateTime? @default("9999-12-31T00:00:00Z") @map("end_date") @db.Date // 조직 폐쇄일
-  desc      String?   @db.Text // 상세 설명
-
-  // 시스템 기록
-  regTime DateTime @default(now()) @map("reg_time") // 등록 시간
-
-  employee                Employee[]
-  historiesAsOrganization EmployeeOrganizationHistory[] @relation("DepartmentRelation")
-  historiesAsTeam         EmployeeOrganizationHistory[] @relation("TeamRelation")
+  // 기타 관계 및 히스토리
   employeesAsOrganization Employee[]                    @relation("EmployeeDepartment")
   employeesAsTeam         Employee[]                    @relation("EmployeeTeam")
-  projects                Project[]
+  historiesAsOrganization EmployeeOrganizationHistory[] @relation("DepartmentRelation")
+  historiesAsTeam         EmployeeOrganizationHistory[] @relation("TeamRelation")
+
+  // DB Pull 시 생성되었던 기존 관계들 (에러 방지용)
+  project_dept_rel Project[] @relation("project_department_idToorganization")
 
   @@index([parentId])
   @@index([startDate, endDate])
   @@index([name])
-  @@map("organization") // 실제 DB 테이블명
+  @@map("organization")
 }
 
 model Employee {
-  seq Int @default(autoincrement()) @map("seq")
-
-  id String @unique @map("id")
-  no String @unique @map("employee_no")
-
-  nameKr       String    @map("name_kr") // 한글이름
-  nameEn       String?   @map("name_en") // 영문이름
-  nameCh       String?   @map("name_zh") // 한자이름
-  residentNo   String    @unique @map("resident_no") // 주민등록번호
-  password     String // 패스워드
-  birthDate    DateTime  @map("birth_date") @db.Date // 생년월일
-  isLunar      Boolean   @default(false) @map("is_lunar") // 음력
-  gender       String    @default("UNKNOWN") @map("gender") // 성별
-  departmentId Int?      @map("department_id") // '실' 단위 ID
-  teamId       Int?      @map("team_id") // '팀' 단위 ID
+  seq          Int       @default(autoincrement()) @map("seq")
+  id           String    @unique @map("id")
+  no           String    @unique @map("employee_no")
+  nameKr       String    @map("name_kr")
+  nameEn       String?   @map("name_en")
+  nameCh       String?   @map("name_zh")
+  residentNo   String    @unique @map("resident_no")
+  password     String
+  birthDate    DateTime  @map("birth_date") @db.Date
+  isLunar      Boolean   @default(false) @map("is_lunar")
+  gender       String    @default("UNKNOWN") @map("gender")
+  departmentId Int?      @map("department_id")
+  teamId       Int?      @map("team_id")
   deptId       Int?      @map("dept_id")
-  jobLevel     String?   @map("job_level") // 직급
-  jobRole      String?   @map("job_role") // 직책
-  assignStatus String?   @map("assign_status") // 구분(투입_정산, 투입_지원, 대기, 관리)
-  authLevel    String    @default("USER") @map("auth_level") // 권한(사용자, 매니저, 마스터, 슈퍼어드민)
-  email        String? // 이메일
-  joinDate     DateTime  @map("join_date") @db.Date // 입사일
-  exitDate     DateTime? @map("exit_date") @db.Date // 퇴사일
-  phone        String? // 휴대폰번호
+  jobLevel     String?   @map("job_level")
+  jobRole      String?   @map("job_role")
+  assignStatus String?   @map("assign_status")
+  authLevel    String    @default("USER") @map("auth_level")
+  email        String?
+  joinDate     DateTime  @map("join_date") @db.Date
+  exitDate     DateTime? @map("exit_date") @db.Date
+  phone        String?
 
-  dept       Organization? @relation(fields: [deptId], references: [id])
-  department Organization? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
-  team       Organization? @relation("EmployeeTeam", fields: [teamId], references: [id])
+  // ✅ 관계 설정
+  org          Organization? @relation("EmployeeToOrganization", fields: [deptId], references: [id])
+  department   Organization? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
+  team         Organization? @relation("EmployeeTeam", fields: [teamId], references: [id])
 
-  employeeOrganizationHistory EmployeeOrganizationHistory[] // 부서변경 히스토리
-  employeeDetail              EmployeeDetail? // 상세정보
-  assets                      Asset[] // 자산정보
-  projectAssignments          ProjectAssignment[] // 프로젝트 경력
-  employeeMonthlyMms          EmployeeMonthlyMm[] // M/M
-  certificates                Certificate[] // 자격증
-  technicalAbility            TechnicalAbility? // 역량정보
-  employeeTool                EmployeeTool? // 사용하는 툴
-  preProjectAssignments       PreProjectAssignment[] // 과거 프로젝트 경력
-  previousExperiences         PreviousExperience[] // 전직장 경력
+  assets                      Asset[]
   ownedFiles                  Attachment[]                  @relation("EmployeeFiles")
   uploadedFiles               Attachment[]                  @relation("UploadedFiles")
+  certificates                Certificate[]
+  employeeDetail              EmployeeDetail?
+  employeeMonthlyMms          EmployeeMonthlyMm[]
+  employeeOrganizationHistory EmployeeOrganizationHistory[]
+  employeeTool                EmployeeTool?
+  preProjectAssignments       PreProjectAssignment[]
+  previousExperiences         PreviousExperience[]
+  projectAssignments          ProjectAssignment[]
+  technicalAbility            TechnicalAbility?
 
   @@index([id])
   @@index([no])
@@ -115,355 +110,279 @@ model Employee {
 }
 
 model EmployeeDetail {
-  id Int @id @default(autoincrement())
-
-  employeeId String   @unique @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-
-  type           String    @default("정규직") @map("type") // 직원유형(정규직, 계약직, 프리랜서)
-  hrStatus       String    @default("재직") @map("hr_status") // 직원구분(재직, 퇴사, 휴직)
-  skillLevel     String    @default("초급") @map("skill_level") // 레벨(초급, 중급, 고급, 특급)
-  leaveStartDate DateTime? @map("leave_start_date") @db.Date // 휴직 시작일
-  leaveEndDate   DateTime? @map("leave_end_date") @db.Date // 휴직종료일
-
-  // 학력 정보
-  eduLevel          String?   @map("edu_level") // 최종학력(고졸, 전문대졸, 학사, 석사, 박사)
-  lastSchool        String?   @map("last_school") // 최종학교
-  major             String? // 전공
-  entranceDate      DateTime? @map("entrance_date") @db.Date // 입학일
-  graduationDate    DateTime? @map("graduation_date") @db.Date // 졸업일
-  totalSwExperience Int?      @default(0) @map("total_sw_experience") // 총경력
-  prevSwExperience  Int?      @default(0) @map("prev_sw_experience") // 전 경력
-
-  // 개인 신상
+  id                Int       @id @default(autoincrement())
+  employeeId        String    @unique @map("employee_id")
+  type              String    @default("정규직") @map("type")
+  hrStatus          String    @default("재직") @map("hr_status")
+  skillLevel        String    @default("초급") @map("skill_level")
+  leaveStartDate    DateTime? @map("leave_start_date") @db.Date
+  leaveEndDate      DateTime? @map("leave_end_date") @db.Date
+  eduLevel          String?   @map("edu_level")
+  lastSchool        String?   @map("last_school")
+  major             String?
+  entranceDate      DateTime? @map("entrance_date") @db.Date
+  graduationDate    DateTime? @map("graduation_date") @db.Date
+  totalSwExperience Int?      @default(0) @map("total_sw_experience")
+  prevSwExperience  Int?      @default(0) @map("prev_sw_experience")
   maritalStatus     String?   @map("marital_status")
-  weddingAnniv      DateTime? @map("wedding_anniv") @db.Date // 결혼기념일
-  emergencyPhone    String?   @map("emergency_phone") // 비상연락처
-  emergencyRelation String?   @map("emergency_relation") // 본인과의 관계
-
-  // 주소 정보
-  zipCode       String? @map("zip_code") // 우편번호
-  address       String? // 주소
-  addressDetail String? @map("address_detail") // 상세주소
-
-  remarks      String?     @map("remarks") @db.Text // 특이사항
-  profilePath  String?     @map("profile_path")
-  CommonCode   CommonCode? @relation(fields: [commonCodeId], references: [id])
-  commonCodeId Int?
+  weddingAnniv      DateTime? @map("wedding_anniv") @db.Date
+  emergencyPhone    String?   @map("emergency_phone")
+  emergencyRelation String?   @map("emergency_relation")
+  zipCode           String?   @map("zip_code")
+  address           String?
+  addressDetail     String?   @map("address_detail")
+  remarks           String?   @map("remarks") @db.Text
+  profilePath       String?   @map("profile_path")
+  commonCodeId      Int?
+  CommonCode        CommonCode? @relation(fields: [commonCodeId], references: [id])
+  employee          Employee    @relation(fields: [employeeId], references: [id])
 
   @@map("employee_detail")
 }
 
-// 부서 이동 히스토리
+model Project {
+  id            Int           @id @default(autoincrement())
+  name          String
+  customerId    Int?          @map("customer_id")
+  department_id Int?
+  teamId        Int?          @map("team_id")
+  regTime       DateTime      @default(now()) @map("reg_time")
+  startDate     DateTime?     @map("start_date") @db.Date
+  endDate       DateTime?     @map("end_date") @db.Date
+  headcount     Int?          @default(0)
+  amount        Decimal       @db.Decimal(15, 2)
+  status        String?
+  location      String?
+  taskName      String?       @map("task_name")
+  taskSummary   String?       @map("task_summary") @db.Text
+  remarks       String?       @map("remarks") @db.Text
+
+  // ✅ 서비스 코드 호환용 관계 설정
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  team          Organization? @relation("OrganizationToProject", fields: [teamId], references: [id])
+  dept_rel      Organization? @relation("project_department_idToorganization", fields: [department_id], references: [id])
+
+  projectAssignment ProjectAssignment[]
+  projectContacts   ProjectContact[]
+
+  @@unique([customerId, name])
+  @@index([customerId])
+  @@index([startDate, endDate])
+  @@index([regTime])
+  @@index([department_id])
+  @@map("project")
+}
+
+model ProjectAssignment {
+  id           Int       @id @default(autoincrement())
+  projectId    Int       @map("project_id")
+  employeeId   String    @map("employee_id")
+  startDate    DateTime  @map("start_date") @db.Date
+  endDate      DateTime? @map("end_date") @db.Date
+  assignedRole String?   @map("assigned_role")
+  tools        String?
+  workDetail   String?   @map("work_detail") @db.Text
+  contribution String?   @db.Text
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  project      Project   @relation(fields: [projectId], references: [id])
+  projectAssignmentPeriod ProjectAssignmentPeriod[]
+
+  @@map("project_assignment")
+}
+
+model ProjectAssignmentPeriod {
+  id           Int               @id @default(autoincrement())
+  assignmentId Int               @map("assignment_id")
+  status       String?
+  startDate    DateTime          @map("start_date") @db.Date
+  endDate      DateTime?         @map("end_date") @db.Date
+  regTime      DateTime          @default(now()) @map("reg_time")
+  assignment   ProjectAssignment @relation(fields: [assignmentId], references: [id])
+
+  @@map("project_assignment_period")
+}
+
+model EmployeeMonthlyMm {
+  id           Int      @id @default(autoincrement())
+  employeeId   String   @map("employee_id")
+  yearMonth    String   @map("year_month")
+  startDate    DateTime @map("start_date") @db.Date
+  endDate      DateTime @map("end_date") @db.Date
+  assignStatus String?
+  value        Decimal  @db.Decimal(5, 2)
+  regTime      DateTime @default(now()) @map("reg_time")
+  employee     Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("employee_monthly_mm")
+}
+
 model EmployeeOrganizationHistory {
-  id Int @id @default(autoincrement())
-
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-
-  departmentId Int  @map("department_id")
-  teamId       Int? @map("team_id")
-
-  department Organization  @relation("DepartmentRelation", fields: [departmentId], references: [id])
-  team       Organization? @relation("TeamRelation", fields: [teamId], references: [id])
-
-  jobLevel String? @map("job_level") // 직급 (사원, 대리 등)
-  jobRole  String? @map("job_role") // 역할 (팀장, 파트장 등)
-
-  applyDate DateTime @map("apply_date") @db.Date // 발령일
-
-  regTime DateTime @default(now()) @map("reg_time")
+  id           Int           @id @default(autoincrement())
+  employeeId   String        @map("employee_id")
+  departmentId Int           @map("department_id")
+  teamId       Int?          @map("team_id")
+  jobLevel     String?       @map("job_level")
+  jobRole      String?       @map("job_role")
+  applyDate    DateTime      @map("apply_date") @db.Date
+  regTime      DateTime      @default(now()) @map("reg_time")
+  department   Organization  @relation("DepartmentRelation", fields: [departmentId], references: [id])
+  employee     Employee      @relation(fields: [employeeId], references: [id])
+  team         Organization? @relation("TeamRelation", fields: [teamId], references: [id])
 
   @@map("employee_organization_history")
 }
 
 model PreviousExperience {
-  id Int @id @default(autoincrement()) @map("id")
-
-  // 사원 관계 설정
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-
-  companyName       String    @map("company_name") // 직장명
-  department        String?   @map("department") // 근무 부서
-  jobLevel          String?   @map("jobLevel") // 최종 직급 (예: 대리, 과장)
-  jobRole           String?   @map("job_role") // 담당 직무 (예: 백엔드 개발, QA)
+  id                Int       @id @default(autoincrement()) @map("id")
+  employeeId        String    @map("employee_id")
+  companyName       String    @map("company_name")
+  department        String?   @map("department")
+  jobLevel          String?   @map("jobLevel")
+  jobRole           String?   @map("job_role")
   relevance         String    @default("유관") @map("relevance")
-  entranceDate      DateTime  @map("entrance_date") @db.Date // 입사일
-  resignationDate   DateTime? @map("resignation_date") @db.Date // 퇴사일
-  assignedTask      String?   @map("assigned_task") @db.Text // 담당 업무 상세
-  resignationReason String?   @map("resignation_reason") // 퇴사사유
-
-  regTime DateTime @default(now()) @map("reg_time")
+  entranceDate      DateTime  @map("entrance_date") @db.Date
+  resignationDate   DateTime? @map("resignation_date") @db.Date
+  assignedTask      String?   @map("assigned_task") @db.Text
+  resignationReason String?   @map("resignation_reason")
+  regTime           DateTime  @default(now()) @map("reg_time")
+  employee          Employee  @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId])
   @@map("previous_experience")
 }
 
 model Asset {
-  id Int @id @default(autoincrement())
+  id             Int        @id @default(autoincrement())
+  employeeId     String?    @map("employee_id")
+  name           String
+  typeId         String?    @map("type_id")
+  vendor         String?
+  model          String?
+  number         String?
+  serialNo       String?    @map("serial_no")
+  purchaseDate   DateTime?  @map("purchase_date") @db.Date
+  purchaseAmount Decimal?   @map("purchase_amount") @db.Decimal(12, 2)
+  warrantyDate   DateTime?  @map("warranty_date") @db.Date
+  status         String?
+  assignDate     DateTime?  @map("assign_date") @db.Date
+  registDate     DateTime   @default(now()) @map("regist_date")
+  assetTypeId    Int?
+  assetType      AssetType? @relation(fields: [assetTypeId], references: [id])
+  employee       Employee?  @relation(fields: [employeeId], references: [id])
 
-  employeeId String?   @map("employee_id")
-  employee   Employee? @relation(fields: [employeeId], references: [id])
-
-  name     String // 자산명 (예: 맥북 프로)
-  typeId   String? @map("type_id") // 자산 유형 ID (노트북, 모니터 등)
-  vendor   String? // 제조사 (제안하신 vender 오타 포함하여 유지, 보통 vendor)
-  model    String? // 모델명
-  number   String? // 자산 번호 (관리 번호)
-  serialNo String? @map("serial_no") // 시리얼 번호
-
-  purchaseDate   DateTime? @map("purchase_date") @db.Date // 구매일
-  purchaseAmount Decimal?  @map("purchase_amount") @db.Decimal(12, 2) // 구매 금액
-  warrantyDate   DateTime? @map("warranty_date") @db.Date // 보증 만료일
-
-  status      String? // 상태 (정상, 수리중, 폐기 등)
-  assignDate  DateTime?  @map("assign_date") @db.Date // 사원 할당일
-  registDate  DateTime   @default(now()) @map("regist_date") // 시스템 등록일
-  assetType   AssetType? @relation(fields: [assetTypeId], references: [id])
-  assetTypeId Int?
-
-  @@map("assets") // 실제 DB 테이블명
+  @@map("assets")
 }
 
-// 자산 유형 (카테고리) 테이블
 model AssetType {
   id       Int      @id @default(autoincrement())
-  name     String // 유형 이름 (예: 노트북, 모니터, 소프트웨어)
-  isActive Boolean  @default(true) @map("is_active") // 활성화 여부
-  regTime  DateTime @default(now()) @map("reg_time") // 등록 시간
+  name     String
+  isActive Boolean  @default(true) @map("is_active")
+  regTime  DateTime @default(now()) @map("reg_time")
+  assets   Asset[]
 
-  // 관계 설정: 이 유형에 속한 실제 자산들
-  assets Asset[]
-
-  @@map("assets_type") // 요청하신 테이블명 적용
+  @@map("assets_type")
 }
 
 model Customer {
-  id   Int    @id @default(autoincrement())
-  name String // 고객사명
+  id         Int               @id @default(autoincrement())
+  name       String
+  businessNo String            @unique @map("business_no")
+  ceoName    String?           @map("ceo_name")
+  industry   String?
+  tel        String?
+  fax        String?
+  address    String?
+  homepage   String?
+  status     String            @default("활성") @map("status")
+  remarks    String?           @map("remarks") @db.Text
+  regTime    DateTime          @default(now()) @map("reg_time")
+  contacts   CustomerContact[]
+  projects   Project[]
 
-  businessNo String  @unique @map("business_no") // 사업자등록번호 (중복 방지)
-  ceoName    String? @map("ceo_name") // 대표자명
-  industry   String? // 업종
-  tel        String? // 대표 연락처
-  fax        String? // 팩스
-  address    String? // 주소
-  homepage   String? // 홈페이지 주소
-  status     String  @default("활성") @map("status") // 거래상태 (예: 활성-ACTIVE, 비활성-INACTIVE)
-  remarks    String? @map("remarks") @db.Text // 비고 (긴 텍스트 대응)
-
-  regTime DateTime @default(now()) @map("reg_time")
-
-  projects Project[]
-  contacts CustomerContact[]
-
-  @@map("customer") // 실제 DB 테이블명
+  @@map("customer")
 }
 
-// 고객사 담당자 정보
 model CustomerContact {
-  id         Int     @id @default(autoincrement())
-  name       String
-  email      String?
-  phone      String?
-  tel        String?
-  jobRole    String?
-  department String?
-  remarks    String? @map("remarks") @db.Text
-
-  customerId Int      @map("customer_id")
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade) // 고객사 삭제 시 담당자도 삭제
-
-  isPrimary Boolean  @default(false) @map("is_primary")
-  regTime   DateTime @default(now()) @map("reg_time")
-
+  id              Int              @id @default(autoincrement())
+  name            String
+  email           String?
+  phone           String?
+  tel             String?
+  jobRole         String?
+  department      String?
+  remarks         String?          @map("remarks") @db.Text
+  customerId      Int              @map("customer_id")
+  isPrimary       Boolean          @default(false) @map("is_primary")
+  regTime         DateTime         @default(now()) @map("reg_time")
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
   projectContacts ProjectContact[]
 
   @@map("customer_contact")
 }
 
-// 프로젝트 - 고객사담당자 매핑정보
 model ProjectContact {
-  id Int @id @default(autoincrement())
-
-  projectId Int @map("project_id")
-  contactId Int @map("contact_id")
-
-  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  contact CustomerContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-
-  regTime DateTime @default(now()) @map("reg_time")
+  id        Int             @id @default(autoincrement())
+  projectId Int             @map("project_id")
+  contactId Int             @map("contact_id")
+  regTime   DateTime        @default(now()) @map("reg_time")
+  contact   CustomerContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, contactId])
   @@map("project_contact")
 }
 
-// 역량정보
 model TechnicalAbility {
-  employeeId String @id @map("employee_id")
-
-  communicationSkill String? @map("communication_skill") @db.Text // 소통능력
-  officeSkill        String? @map("office_skill") @db.Text // 오피스활용
-  testDesign         String? @map("test_design") @db.Text // 테스트설계
-  testExecution      String? @map("test_execution") @db.Text // 테스트수행
-
-  regTime DateTime @default(now()) @map("reg_time")
-
-  employee Employee @relation(fields: [employeeId], references: [id])
+  employeeId         String   @id @map("employee_id")
+  communicationSkill String?  @map("communication_skill") @db.Text
+  officeSkill        String?  @map("office_skill") @db.Text
+  testDesign         String?  @map("test_design") @db.Text
+  testExecution      String?  @map("test_execution") @db.Text
+  regTime            DateTime @default(now()) @map("reg_time")
+  employee           Employee @relation(fields: [employeeId], references: [id])
 
   @@map("technical_ability")
 }
 
 model EmployeeTool {
-  employeeId String @id @map("employee_id")
-
-  defectSystem String? @map("defect_system") @db.Text // 결함 관리 시스템 (Jira, Mantis 등)
-  messenger    String? @map("messenger") @db.Text // 소통 수단 (Slack, Teams, KakaoWork 등)
-  apiTool      String? @map("api_tool") @db.Text // API 도구 (Postman, Swagger 등)
-  etcTool      String? @map("etc_tool") @db.Text // 기타 도구
-
+  employeeId       String   @id @map("employee_id")
+  defectSystem     String?  @map("defect_system") @db.Text
+  messenger        String?  @map("messenger") @db.Text
+  apiTool          String?  @map("api_tool") @db.Text
+  etcTool          String?  @map("etc_tool") @db.Text
   updatregDateedAt DateTime @updatedAt @map("reg_date")
-
-  employee Employee @relation(fields: [employeeId], references: [id])
+  employee         Employee @relation(fields: [employeeId], references: [id])
 
   @@map("employee_tool")
 }
 
-// 과거경력
 model PreProjectAssignment {
-  id Int @id @default(autoincrement())
-
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-
+  id           Int       @id @default(autoincrement())
+  employeeId   String    @map("employee_id")
   projectName  String    @map("project_name")
   customerName String?   @map("client_name")
   startDate    DateTime  @map("start_date") @db.Date
   endDate      DateTime? @map("end_date") @db.Date
-  headcount    Int?      @default(0) // 투입 인원
-
-  taskName    String? @map("task_name") // 업무명
-  taskSummary String? @map("task_summary") @db.Text // 업무 요약
-
-  assignedRole String? @map("assigned_role") // 담당 역할
-  tools        String? @map("tools") // 사용 도구/기술 스택
-  workDetail   String? @map("work_detail") @db.Text // 수행 업무 상세 내용
-  contribution String? @db.Text // 기여사항
-
-  regTime DateTime @default(now()) @map("reg_time")
+  headcount    Int?      @default(0)
+  taskName     String?   @map("task_name")
+  taskSummary  String?   @map("task_summary") @db.Text
+  assignedRole String?   @map("assigned_role")
+  tools        String?
+  workDetail   String?   @map("work_detail") @db.Text
+  contribution String?   @db.Text
+  regTime      DateTime  @default(now()) @map("reg_time")
+  employee     Employee  @relation(fields: [employeeId], references: [id])
 
   @@map("pre_project_assignment")
 }
 
-// 프로젝트
-model Project {
-  id   Int    @id @default(autoincrement())
-  name String // 프로젝트명
-
-  // 관계 설정 (고객사 및 담당 부서)
-  customerId Int?      @map("customer_id")
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  teamId Int?          @map("team_id")
-  team   Organization? @relation(fields: [teamId], references: [id])
-
-  // 기간 및 인원
-  regTime   DateTime  @default(now()) @map("reg_time")
-  startDate DateTime? @map("start_date") @db.Date // 시작일
-  endDate   DateTime? @map("end_date") @db.Date // 종료일
-  headcount Int?      @default(0) // 투입 인원
-  amount    Decimal   @db.Decimal(15, 2)
-  status    String?
-
-  // 프로젝트 상세
-  location    String? // 근무지 (예: 본사, 고객사 상주 등)
-  taskName    String? @map("task_name") // 업무명
-  taskSummary String? @map("task_summary") @db.Text // 업무 요약
-  remarks     String? @map("remarks") @db.Text // 특이사항
-
-  // 프로젝트 참여 인원 이력 (필요 시)
-  // members       ProjectMember[]
-  projectAssignment ProjectAssignment[]
-  projectContacts   ProjectContact[]
-
-  @@unique([customerId, name])
-  @@index([customerId])
-  @@index([teamId])
-  @@index([startDate, endDate])
-  @@index([regTime])
-  @@map("project")
-}
-
-// 프로젝트 투입 상세(한사람이 투입되는 기본 정보)
-model ProjectAssignment {
-  id Int @id @default(autoincrement())
-
-  // 프로젝트 관계 설정
-  projectId Int     @map("project_id")
-  project   Project @relation(fields: [projectId], references: [id])
-
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-
-  startDate DateTime  @map("start_date") @db.Date
-  endDate   DateTime? @map("end_date") @db.Date
-
-  assignedRole            String?                   @map("assigned_role") // 담당 역할
-  tools                   String? // 사용 도구/기술 스택 (예: React, Java, Figma)
-  workDetail              String?                   @map("work_detail") @db.Text // 수행 업무 상세 내용
-  contribution            String?                   @db.Text // 기여사항
-  projectAssignmentPeriod ProjectAssignmentPeriod[]
-
-  @@map("project_assignment")
-}
-
-// 프로젝트 투입 상세
-model ProjectAssignmentPeriod {
-  id Int @id @default(autoincrement())
-
-  // 프로젝트 투입(Assignment) 관계 설정
-  assignmentId Int               @map("assignment_id")
-  assignment   ProjectAssignment @relation(fields: [assignmentId], references: [id])
-
-  // 기간 정보 및 상태
-  status    String? // 상태 (예: 투입_정산, 투입_지원)
-  startDate DateTime  @map("start_date") @db.Date // 상세 시작일
-  endDate   DateTime? @map("end_date") @db.Date // 상세 종료일
-
-  regTime DateTime @default(now()) @map("reg_time")
-
-  @@map("project_assignment_period")
-}
-
-model EmployeeMonthlyMm {
-  id Int @id @default(autoincrement())
-
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id])
-
-  // 월별 관리 정보
-  yearMonth String   @map("year_month") // 대상 년월 (예: "2024-05")
-  startDate DateTime @map("start_date") @db.Date // 해당 월 내 투입 시작일
-  endDate   DateTime @map("end_date") @db.Date // 해당 월 내 투입 종료일
-
-  // 상태 및 수치
-  assignStatus String? // 상태 (예: 투입_정산, 투입_지원, 대기, 관리)
-  value        Decimal @db.Decimal(5, 2) // MM 값 (예: 1.0, 0.5, 0.25)
-
-  regTime DateTime @default(now()) @map("reg_time")
-
-  @@map("employee_monthly_mm")
-}
-
 model CommonCode {
-  id      Int      @id @default(autoincrement()) @map("id")
-  type    String   @map("type")
-  code    String   @map("code")
-  name    String   @map("name")
-  isUsed  Boolean  @default(true) @map("is_used")
-  regTime DateTime @default(now()) @map("reg_time")
-
+  id             Int              @id @default(autoincrement()) @map("id")
+  type           String           @map("type")
+  code           String           @map("code")
+  name           String           @map("name")
+  isUsed         Boolean          @default(true) @map("is_used")
+  regTime        DateTime         @default(now()) @map("reg_time")
   EmployeeDetail EmployeeDetail[]
 
   @@unique([type, code])
@@ -471,95 +390,33 @@ model CommonCode {
 }
 
 model Certificate {
-  id Int @id @default(autoincrement()) @map("id")
-
-  employeeId       String    @map("employee_id")
-  type             String    @map("cert_type") // 구분: 취득(CERT), 수료(COMPL)
-  name             String    @map("cert_name") // 자격증 명칭
-  issuingAuthority String    @map("issuing_authority") // 발급 기관 / 교육 기관
-  acquisitionDate  DateTime  @map("acquisition_date") // 취득일 또는 수료일
-  expDate          DateTime? @map("exp_date") // 만료 일자 (있는 경우에만 입력)
-
-  attachments Attachment[]
-
-  regTime DateTime @default(now()) @map("reg_time")
-
-  employee Employee @relation(fields: [employeeId], references: [id])
+  id               Int          @id @default(autoincrement()) @map("id")
+  employeeId       String       @map("employee_id")
+  type             String       @map("cert_type")
+  name             String       @map("cert_name")
+  issuingAuthority String       @map("issuing_authority")
+  acquisitionDate  DateTime     @map("acquisition_date")
+  expDate          DateTime?    @map("exp_date")
+  regTime          DateTime     @default(now()) @map("reg_time")
+  attachments      Attachment[]
+  employee         Employee     @relation(fields: [employeeId], references: [id])
 
   @@map("certificate")
 }
 
 model Attachment {
-  id Int @id @default(autoincrement()) @map("id")
-
-  employeeId String @map("employee_id")
-
-  refId   Int?   @map("ref_id") // 참조하는 테이블의 PK (ID 값)
-  refType String @map("ref_type") // 참조하는 테이블의 종류(employee, project, certificate)
-
-  fileType   String @map("file_type") // 파일구분(인사, 자격증, 계약서)
-  filePath   String @map("file_path") @db.VarChar(500) // 실제 파일이 저장되는 경로와 파일명
-  fileName   String // 사용자가 올린 원본 파일명
-  uploaderId String @map("uploader_id")
-
+  id            Int          @id @default(autoincrement()) @map("id")
+  employeeId    String       @map("employee_id")
+  refId         Int?         @map("ref_id")
+  refType       String       @map("ref_type")
+  fileType      String       @map("file_type")
+  filePath      String       @map("file_path") @db.VarChar(500)
+  fileName      String
+  uploaderId    String       @map("uploader_id")
+  certificateId Int?
+  certificate   Certificate? @relation(fields: [certificateId], references: [id])
   employee      Employee     @relation("EmployeeFiles", fields: [employeeId], references: [id])
   uploader      Employee     @relation("UploadedFiles", fields: [uploaderId], references: [id])
-  certificate   Certificate? @relation(fields: [certificateId], references: [id])
-  certificateId Int?
 
   @@map("attachment")
 }
-
-// // 직원 고용 형태
-// enum EmpType {
-//   REGULAR // 정규직
-//   CONTRACT // 계약직
-//   FREELANCER // 프리랜서
-// }
-//
-// enum EmpStatus {
-//   EMPLOYED // 재직
-//   ON_LEAVE // 휴직
-//   RETIRED // 퇴직
-// }
-//
-// // 결혼 상태
-// enum MaritalStatus {
-//   SINGLE // 미혼
-//   MARRIED // 기혼
-//   DIVORCED // 이혼
-//   WIDOWED // 사별
-// }
-//
-// // 성별 (Employee 모델에서 사용했다면 필요)
-// enum Gender {
-//   MALE
-//   FEMALE
-//   UNKNOWN
-// }
-//
-// enum AuthRole {
-//   USER // 사용자 (일반 직원)
-//   MANAGER // 매니저 (팀장/부서장급)
-//   MASTER // 마스터 (인사/총무 관리자)
-//   SUPER_ADMIN // 최고관리자 (시스템 전체 관리)
-// }
-//
-// enum AttachmentType {
-//   PROFILE_PHOTO // 사원 사진
-//   CERT_COPY // 자격증 사본
-//   CONTRACT // 계약서
-//   OTHER // 기타 서류
-// }
-//
-// enum RefType {
-//   EMPLOYEE // 사원 관련 (사진, 자격증)
-//   PROJECT // 프로젝트 관련 (계약서, 제안서, 산출물)
-//   LICENSE // 자격증
-// }
-//
-// enum ExperienceRelevance {
-//   RELEVANT // 유관
-//   IRRELEVANT // 무관
-//   SIMILAR // 유사
-// }
