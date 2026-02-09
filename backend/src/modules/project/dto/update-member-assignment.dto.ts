@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProjectAssignmentPeriodDto } from '@common/dto/project-assignment-period.dto';
-import { MonthlyMmDto } from '@common/dto/monthly_mm.dto';
+import { ProjectAssignmentPeriodDto } from '@modules/dto/project-assignment-period.dto';
+import { MonthlyMmDto } from '@modules/dto/monthly_mm.dto';
 
 export class UpdateMemberAssignmentDto {
   @ApiProperty({ type: [ProjectAssignmentPeriodDto], description: '투입 기간 상세 리스트' })

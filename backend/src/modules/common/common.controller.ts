@@ -1,7 +1,7 @@
 import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { CommonService } from './common.service';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-
+import { ApiResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { MemberResponseDto } from './dto/member-response.dto';
 
 @ApiTags('Common - 기초 데이터 (조직/코드)')
 @Controller('common')
@@ -54,5 +54,12 @@ export class CommonController {
   @ApiOperation({ summary: '특정 타입의 공통 코드 목록 조회' })
   async getCodes(@Param('type') type: string) {
     return await this.commonService.getCodesByType(type);
+  }
+
+  @Get('/organizations/teams/:teamId/members')
+  @ApiOperation({ summary: '팀별 구성원 조회' })
+  @ApiResponse({ status: 200, type: [MemberResponseDto] })
+  async getTeamMembers(@Param('teamId', ParseIntPipe) teamId: number): Promise<MemberResponseDto[]> {
+    return this.commonService.findMembersByTeam(teamId);
   }
 }

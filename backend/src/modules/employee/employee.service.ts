@@ -89,10 +89,10 @@ export class EmployeeService {
         await tx.employeeDetail.create({
           data: {
             employeeId: employee.id,
-            type: dto.type || '정규직',
-            hrStatus: dto.hrStatus || '재직',
+            type: dto.type || 'REGULAR',
+            hrStatus: dto.hrStatus || 'EMPLOYED',
             skillLevel: dto.skillLevel || '초급',
-            
+
             // ✅ [추가됨] 최종 학력 저장
             eduLevel: dto.eduLevel,
 
@@ -303,7 +303,7 @@ export class EmployeeService {
         data: {
           type: dto.type,
           hrStatus: dto.hrStatus,
-          
+
           // ✅ [추가됨] 최종 학력 수정
           eduLevel: dto.eduLevel,
 

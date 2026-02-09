@@ -1,22 +1,9 @@
-import { IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { IsOptional, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { CustmerDto } from '@modules/dto/custmer.dto';
 
-export class QueryCustomerDto {
-  @ApiPropertyOptional({ description: '고객사명 검색' })
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @ApiPropertyOptional({ description: '대표자명 검색' })
-  @IsOptional()
-  @IsString()
-  ceoName?: string;
-
-  @ApiPropertyOptional({ description: '거래 상태 필터' })
-  @IsOptional()
-  status?: string;
-
+export class QueryCustomerDto extends CustmerDto {
   @ApiPropertyOptional({ description: '페이지 번호', default: 1 })
   @IsOptional()
   @Type(() => Number)

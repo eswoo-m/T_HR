@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { formatDate } from '../utils/date.util';
+import { formatDate } from '../../common/utils/date.util';
 
 export class MonthlyMmDto {
   @ApiProperty({ example: '202405' })

@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ProjectDto } from '@common/dto/project.dto';
-import { ProjectAssignmentPeriodDto } from '@common/dto/project-assignment-period.dto';
-import { MonthlyMmDto } from '@common/dto/monthly_mm.dto';
+import { ProjectDto } from '@modules/dto/project.dto';
+import { ProjectAssignmentPeriodDto } from '@modules/dto/project-assignment-period.dto';
+import { MonthlyMmDto } from '@modules/dto/monthly_mm.dto';
 
 export class MemberAssignmentResponseDto {
   // 기본 정보

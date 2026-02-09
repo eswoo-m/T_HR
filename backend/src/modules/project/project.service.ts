@@ -3,9 +3,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterProjectDto } from './dto/register-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
-import { ProjectAssignmentDto } from '@common/dto/project-assignment.dto';
+import { ProjectAssignmentDto } from '../dto/project-assignment.dto';
 import { UpdateMemberAssignmentDto } from './dto/update-member-assignment.dto';
+import { ProjectDetailResponseDto } from './dto/project-detail-response.dto';
+import { ProjectBasicInfoDto } from '@modules/dto/project-basic.dto';
 import { formatDate } from '@common/utils/date.util';
+import { ProjectMemberDto } from '@modules/dto/project-member.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -14,7 +17,7 @@ export class ProjectService {
 
   async register(dto: RegisterProjectDto) {
     // 1. 구조 분해 할당 확인 (contacts로 통합해서 받기로 한 경우)000
-    const { customerId, name, amount, location, taskName, taskSummary, remarks, startDate, endDate, teamId, contacts, projectAssignment } = dto;
+    const { customerId, headcount, name, amount, location, status, taskName, taskSummary, remarks, startDate, endDate, teamId, contacts, projectAssignment } = dto;
 
     // 2. 고객사 존재 여부 확인
     if (customerId) {
@@ -29,7 +32,7 @@ export class ProjectService {
     if (isExist) throw new ConflictException('해당 고객사에 이미 동일한 이름의 프로젝트가 존재합니다.');
     return this.prisma.$transaction(async (tx) => {
       // 3. 담당자(Contacts) 데이터 가공
-      const projectContactData = (contacts ?? []).map((c) => {
+      const customerContactData = (contacts ?? []).map((c) => {
         if (c.id) {
           return { contact: { connect: { id: c.id } } };
         } else {
@@ -37,10 +40,13 @@ export class ProjectService {
             contact: {
               create: {
                 name: c.name,
-                email: c.email,
-                phone: c.phone,
                 jobRole: c.jobRole,
                 department: c.department,
+                tel: c.tel,
+                email: c.email,
+                phone: c.phone,
+                remarks: c.remarks,
+                isPrimary: c.isPrimary,
                 customer: { connect: { id: customerId } },
               },
             },
@@ -54,18 +60,20 @@ export class ProjectService {
           name,
           amount,
           location,
+          status: status || 'PLANNING',
+          headcount,
           taskName,
           taskSummary,
           remarks,
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
 
-          customer: { connect: { id: customerId } },
+          customer: customerId ? { connect: { id: customerId } } : undefined,
           team: teamId ? { connect: { id: teamId } } : undefined,
 
           // 담당자 연결/생성
           projectContacts: {
-            create: projectContactData,
+            create: customerContactData,
           },
 
           projectAssignment: projectAssignment?.length ? this.formatAssignmentData(projectAssignment) : undefined,
@@ -111,7 +119,7 @@ export class ProjectService {
           : []),
 
         // 3. 진행 단계(상태)
-        ...(status ? [{ status }] : []),
+        ...(status ? [{ status: { in: status.split(',') } }] : []),
 
         // 4. 투입 인원 범위 검색
         ...(minHeadcount !== undefined || maxHeadcount !== undefined
@@ -166,112 +174,141 @@ export class ProjectService {
       departmentName: p.team?.parent?.name ?? p.team?.name ?? '-',
       teamName: p.team?.parent ? p.team.name : '-',
       status: p.status,
+      startDate: p.startDate ? new Date(p.startDate) : null,
+      endDate: p.endDate ? new Date(p.endDate) : null,
       period: `${p.startDate?.toISOString().split('T')[0] ?? ''} ~ ${p.endDate?.toISOString().split('T')[0] ?? '진행중'}`,
       amount: p.amount,
       headcount: p.headcount,
     }));
   }
 
-  async get(id: number) {
+  async getProjectMembersAssignmentList(projectId: number) {
+    try {
+      // 1. 해당 프로젝트에 속한 모든 구성원(Assignment)을 가져옵니다.
+      const assignments = await this.prisma.projectAssignment.findMany({
+        where: {
+          projectId: projectId,
+        },
+        include: {
+          employee: {
+            include: {
+              department: true,
+              team: true,
+            },
+          },
+          projectAssignmentPeriod: {
+            orderBy: { startDate: 'asc' }, // 투입 기간 순 정렬 ㅋ
+          },
+        },
+      });
+
+      if (!assignments || assignments.length === 0) {
+        return []; // 구성원이 없으면 빈 배열 리턴! ㅋ
+      }
+
+      // 2. 가공해서 프론트가 쓰기 좋은 형태로 리턴 ㅋ
+      return assignments.map((data) => ({
+        employeeId: data.employeeId,
+        name: data.employee.nameKr,
+        jobRole: data.employee.jobRole || '',
+        department: data.employee.department?.name || '-',
+        team: data.employee.team?.name || '-',
+        // 메인 투입 정보 (Assignment 테이블 기준)
+        startDate: formatDate(data.startDate),
+        endDate: formatDate(data.endDate),
+
+        // 세부 투입 기간 리스트 (Period 테이블 기준)
+        projectAssignmentPeriod: data.projectAssignmentPeriod.map((p) => ({
+          id: p.id,
+          employeeId: data.employeeId,
+          startDate: formatDate(p.startDate),
+          endDate: formatDate(p.endDate),
+          status: p.status,
+        })),
+      }));
+    } catch (error: unknown) {
+      // 에러 핸들링은 사수님 기존 스타일 유지 ㅋ
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        throw new BadRequestException(`데이터베이스 요청 오류: ${error.code}`);
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[Project Members List Error]: ${errorMessage}`);
+      throw new InternalServerErrorException(errorMessage);
+    }
+  }
+
+  async get(id: number): Promise<ProjectDetailResponseDto> {
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: {
-        team: {
-          include: {
-            parent: { select: { name: true } },
-          },
-        },
+        team: { include: { parent: { select: { name: true } } } },
         customer: true,
-        projectContacts: {
-          include: { contact: true },
-        },
+        projectContacts: { include: { contact: true } },
         projectAssignment: {
           include: {
             employee: {
-              include: {
-                team: {
-                  include: { parent: { select: { name: true } } },
-                },
-              },
+              include: { team: { include: { parent: { select: { name: true } } } } },
             },
-            projectAssignmentPeriod: {
-              orderBy: { startDate: 'asc' },
-            },
+            projectAssignmentPeriod: { orderBy: { startDate: 'asc' } },
           },
         },
-        _count: { select: { projectAssignment: true } },
       },
     });
 
     if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
 
-    const getDaysBetween = (start: Date | string, end: Date | string) => {
-      const s = new Date(start);
-      const e = new Date(end);
-      const diffTime = Math.abs(e.getTime() - s.getTime());
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    // 헬퍼: 날짜 포맷 ㅋ
+    const formatDate = (date: Date | string | null) => (date ? new Date(date).toISOString().substring(0, 10) : '');
+
+    // 1️⃣ basicInfo 매핑 ㅋ
+    const basicInfo: ProjectBasicInfoDto = {
+      id: project.id,
+      name: project.name,
+      orgText: [project.team?.parent?.name, project.team?.name].filter(Boolean).join(' > '),
+      startDate: formatDate(project.startDate),
+      endDate: formatDate(project.endDate),
+      status: project.status || '',
+      location: project.location || '',
+      headcount: project.headcount || 0,
+      customerName: project.customer?.name || '미정',
+      amount: project.amount ? Number(project.amount) : 0,
+      remarks: project.remarks || '',
+      taskName: project.taskName || '',
+      taskSummary: project.taskSummary || '',
+      customerContacts: (project.projectContacts || []).map((pc) => ({
+        name: pc.contact.name,
+        jobRole: pc.contact.jobRole || '',
+        department: pc.contact.department || '',
+        tel: pc.contact.tel || '',
+        phone: pc.contact.phone || '',
+        email: pc.contact.email || '',
+        remarks: pc.contact.remarks || '',
+      })),
     };
 
-    const totalProjectDays = getDaysBetween(project.startDate ?? new Date(), project.endDate || new Date());
+    // 2️⃣ members 매핑 (메서드 분리 추천 ㅋ)
+    const members: ProjectMemberDto[] = (project.projectAssignment || []).map((pa) => ({
+      id: pa.id,
+      employeeId: pa.employee.id,
+      name: pa.employee.nameKr,
+      jobRole: pa.employee.jobRole || '',
+      parentName: pa.employee.team?.parent?.name || '-',
+      teamName: pa.employee.team?.name || '-',
+      startDate: formatDate(pa.startDate),
+      endDate: formatDate(pa.endDate),
+      projectAssignmentPeriod: (pa.projectAssignmentPeriod || []).map((p) => ({
+        id: p.id,
+        employeeId: pa.employee.id,
+        startDate: formatDate(p.startDate),
+        endDate: formatDate(p.endDate),
+        status: p.status ?? '',
+      })),
+    }));
 
-    const allMemberHistory = (project.projectAssignment || []).flatMap((pa) => {
-      const periods = pa.projectAssignmentPeriod || [];
+    members.sort((a, b) => a.name.localeCompare(b.name));
 
-      return periods.map((period) => {
-        let inputRate = 0;
-        if (period.endDate) {
-          const periodDays = getDaysBetween(period.startDate, period.endDate);
-          inputRate = totalProjectDays > 0 ? Math.round((periodDays / totalProjectDays) * 100) : 0;
-        }
-
-        return {
-          id: pa.employee.id,
-          assignmentId: pa.id,
-          periodId: period.id,
-          name: pa.employee.nameKr,
-          assignmentStatus: period.status || '미정',
-          assignedRole: pa.assignedRole,
-          jobRole: pa.employee.jobRole,
-          department: pa.employee.team?.parent?.name || '',
-          team: pa.employee.team?.name || '',
-          inputRate,
-          startDate: period.startDate,
-          endDate: period.endDate,
-          email: pa.employee.email,
-        };
-      });
-    });
-
-    allMemberHistory.sort((a, b) => a.name.localeCompare(b.name));
-
-    // 3. 최종 반환 객체
-    return {
-      basicInfo: {
-        id: project.id,
-        name: project.name,
-        orgText: [project.team?.parent?.name, project.team?.name].filter(Boolean).join(' > '),
-        startDate: project.startDate,
-        endDate: project.endDate,
-        status: project.status,
-        location: project.location,
-        headcount: project.headcount,
-        customerName: project.customer?.name || '미정',
-        amount: project.amount,
-        remarks: project.remarks,
-        taskName: project.taskName,
-        taskSummary: project.taskSummary,
-        customerContacts: (project.projectContacts || []).map((pc) => ({
-          name: pc.contact.name,
-          jobRole: pc.contact.jobRole,
-          department: pc.contact.department,
-          tel: pc.contact.tel,
-          phone: pc.contact.phone,
-          email: pc.contact.email,
-          remarks: pc.contact.remarks,
-        })),
-      },
-      members: allMemberHistory,
-    };
+    // 3️⃣ 최종 리턴! ㅋ
+    return { basicInfo, members };
   }
 
   async update(id: number, dto: UpdateProjectDto) {
@@ -368,7 +405,6 @@ export class ProjectService {
         orderBy: { yearMonth: 'asc' },
       });
 
-      // UI 데이터 매핑
       return {
         employee: {
           id: data.employee.id,
@@ -382,6 +418,7 @@ export class ProjectService {
           name: data.project.name,
           startDate: formatDate(data.startDate),
           endDate: formatDate(data.startDate),
+          amount: data.project.amount ? Number(data.project.amount) : 0,
         },
         periods: data.projectAssignmentPeriod.map((p) => ({
           status: p.status ?? '',
@@ -472,7 +509,7 @@ export class ProjectService {
         endDate: pa.endDate ? new Date(pa.endDate) : null,
         assignedRole: pa.assignedRole || '팀원',
         projectAssignmentPeriod: {
-          create: (pa.projectAssignment ?? []).map((period) => ({
+          create: (pa.projectAssignmentPeriod ?? []).map((period) => ({
             status: period.status || '투입_정산',
             startDate: new Date(period.startDate),
             endDate: period.endDate ? new Date(period.endDate) : null,

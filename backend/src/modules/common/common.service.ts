@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+// import { Prisma } from '@prisma/client';
 import { TeamStructureDto } from 'src/modules/common/dto/team-structure.dto';
 import { OrgChartDto } from 'src/modules/common/dto/org-chart.dto';
+import { formatDate } from '@common/utils/date.util';
 
 // interface OrganizationWithChildren extends Organization {
 //   level: number;
@@ -10,13 +11,13 @@ import { OrgChartDto } from 'src/modules/common/dto/org-chart.dto';
 //   employee?: any[];
 // }
 
-type OrganizationWithMembers = Prisma.OrganizationGetPayload<{
-  include: {
-    employee: {
-      select: { id: true; nameKr: true; jobRole: true };
-    };
-  };
-}>;
+// type OrganizationWithMembers = Prisma.OrganizationGetPayload<{
+//   include: {
+//     employee: {
+//       select: { id: true; nameKr: true; jobRole: true };
+//     };
+//   };
+// }>;
 
 @Injectable()
 export class CommonService {
@@ -39,7 +40,7 @@ export class CommonService {
           where: {
             employeeDetail: {
               is: {
-                hrStatus: 'ACTIVE',
+                hrStatus: 'EMPLOYED',
               },
             },
           },
@@ -77,58 +78,72 @@ export class CommonService {
     };
   }
 
-  // 조직도
   async getOrganizationChart(includeMembers: boolean): Promise<OrgChartDto[]> {
     try {
-      const rawOrgs = await this.prisma.organization.findMany({
-        include: {
-          employee: includeMembers
-            ? {
-                where: { employeeDetail: { is: { hrStatus: 'ACTIVE' } } },
-                select: { id: true, nameKr: true, jobRole: true },
-              }
-            : false,
-        },
+      // 1. 조직 조회
+      const rawOrgs = await this.prisma.organization.findMany();
+
+      // 2. 직원 조회 (현 소속 조직 = deptId)
+      const employees = includeMembers
+        ? await this.prisma.employee.findMany({
+            where: {
+              deptId: { not: null }, // deptId가 있는 직원만
+              employeeDetail: { is: { hrStatus: 'EMPLOYED' } }, // 재직중
+            },
+            select: {
+              id: true,
+              nameKr: true,
+              jobRole: true,
+              deptId: true,
+            },
+          })
+        : [];
+
+      // 3. deptId 기준 직원 Map 생성 (string key로 통일)
+      const empMap = new Map<string, typeof employees>();
+      employees.forEach((emp) => {
+        if (!emp.deptId) return;
+        const key = String(emp.deptId);
+        if (!empMap.has(key)) empMap.set(key, []);
+        empMap.get(key)!.push(emp);
       });
 
-      const allOrgs = rawOrgs as unknown as OrganizationWithMembers[];
-      const orgMap = new Map<number, OrgChartDto>();
-
-      for (const org of allOrgs) {
+      // 4. 조직 Map 생성 (string key)
+      const orgMap = new Map<string, OrgChartDto>();
+      rawOrgs.forEach((org) => {
         const node: OrgChartDto = {
           id: org.id,
           name: org.name,
           level: 0,
+          description: org.desc || '',
+          regDate: formatDate(org.regTime) || '',
           children: [],
-          members:
-            includeMembers && org.employee
-              ? org.employee.map((emp) => ({
-                  id: emp.id,
-                  nameKr: emp.nameKr,
-                  jobRole: emp.jobRole ?? '',
-                }))
-              : undefined,
+          members: includeMembers
+            ? (empMap.get(String(org.id)) ?? []).map((emp) => ({
+                id: emp.id,
+                nameKr: emp.nameKr,
+                jobRole: emp.jobRole ?? '',
+              }))
+            : undefined,
         };
-        orgMap.set(org.id, node);
-      }
+        orgMap.set(String(org.id), node);
+      });
 
+      // 5. 조직 트리 구성
       const rootNodes: OrgChartDto[] = [];
-      allOrgs.forEach((org) => {
-        const currentNode = orgMap.get(org.id)!;
-
+      rawOrgs.forEach((org) => {
+        const currentNode = orgMap.get(String(org.id))!;
         if (org.parentId === null) {
-          // 최상위 노드인 경우 루트 배열에 추가
           rootNodes.push(currentNode);
         } else {
-          // 부모가 있는 경우, Map에서 부모를 찾아 그 자식 배열에 현재 노드를 push
-          const parentNode = orgMap.get(org.parentId);
+          const parentNode = orgMap.get(String(org.parentId));
           if (parentNode) {
             parentNode.children!.push(currentNode);
           }
         }
       });
 
-      // 5. 재귀 함수를 이용해 레벨(level)을 정확히 계산
+      // 6. level 계산 (재귀)
       const setLevel = (nodes: OrgChartDto[], level: number) => {
         nodes.forEach((node) => {
           node.level = level;
@@ -137,14 +152,95 @@ export class CommonService {
           }
         });
       };
-
       setLevel(rootNodes, 1);
+
+      // 7. 디버그 로그 (직원 Map 확인용)
+      if (includeMembers) {
+        // console.log('=== Employee Map ===');
+        empMap.forEach((emps, deptId) => {
+          console.log(
+            `deptId: ${deptId}, employees:`,
+            emps.map((e) => e.nameKr),
+          );
+        });
+      }
 
       return rootNodes;
     } catch (error: unknown) {
       throw new InternalServerErrorException(error instanceof Error ? error.message : '조직도 조회 중 오류');
     }
   }
+
+  // 조직도
+  // async getOrganizationChart(includeMembers: boolean): Promise<OrgChartDto[]> {
+  //   try {
+  //     const rawOrgs = await this.prisma.organization.findMany({
+  //       include: {
+  //         employee: includeMembers
+  //           ? {
+  //               where: { employeeDetail: { is: { hrStatus: 'EMPLOYED' } } },
+  //               select: { id: true, nameKr: true, jobRole: true },
+  //             }
+  //           : false,
+  //       },
+  //     });
+  //
+  //     const allOrgs = rawOrgs as unknown as OrganizationWithMembers[];
+  //     const orgMap = new Map<number, OrgChartDto>();
+  //
+  //     for (const org of allOrgs) {
+  //       const node: OrgChartDto = {
+  //         id: org.id,
+  //         name: org.name,
+  //         level: 0,
+  //         description: org.desc || '',
+  //         regDate: formatDate(org.regTime) || '',
+  //         children: [],
+  //         members:
+  //           includeMembers && org.employee
+  //             ? org.employee.map((emp) => ({
+  //                 id: emp.id,
+  //                 nameKr: emp.nameKr,
+  //                 jobRole: emp.jobRole ?? '',
+  //               }))
+  //             : undefined,
+  //       };
+  //       orgMap.set(org.id, node);
+  //     }
+  //
+  //     const rootNodes: OrgChartDto[] = [];
+  //     allOrgs.forEach((org) => {
+  //       const currentNode = orgMap.get(org.id)!;
+  //
+  //       if (org.parentId === null) {
+  //         // 최상위 노드인 경우 루트 배열에 추가
+  //         rootNodes.push(currentNode);
+  //       } else {
+  //         // 부모가 있는 경우, Map에서 부모를 찾아 그 자식 배열에 현재 노드를 push
+  //         const parentNode = orgMap.get(org.parentId);
+  //         if (parentNode) {
+  //           parentNode.children!.push(currentNode);
+  //         }
+  //       }
+  //     });
+  //
+  //     // 5. 재귀 함수를 이용해 레벨(level)을 정확히 계산
+  //     const setLevel = (nodes: OrgChartDto[], level: number) => {
+  //       nodes.forEach((node) => {
+  //         node.level = level;
+  //         if (node.children && node.children.length > 0) {
+  //           setLevel(node.children, level + 1);
+  //         }
+  //       });
+  //     };
+  //
+  //     setLevel(rootNodes, 1);
+  //
+  //     return rootNodes;
+  //   } catch (error: unknown) {
+  //     throw new InternalServerErrorException(error instanceof Error ? error.message : '조직도 조회 중 오류');
+  //   }
+  // }
 
   // 팀 목록: 선택된 부서 ID로 필터링
   async getRootOrganizations() {
@@ -211,5 +307,39 @@ export class CommonService {
       select: { type: true, code: true, name: true },
       orderBy: { id: 'asc' },
     });
+  }
+
+  async findMembersByTeam(teamId: number) {
+    const members = await this.prisma.employee.findMany({
+      where: {
+        teamId: teamId,
+        employeeDetail: {
+          hrStatus: 'EMPLOYED',
+        },
+      },
+      select: {
+        id: true,
+        nameKr: true,
+        jobLevel: true,
+        jobRole: true,
+        department: {
+          select: { name: true },
+        },
+        team: {
+          select: { name: true },
+        },
+      },
+      orderBy: {
+        nameKr: 'asc',
+      },
+    });
+
+    return members.map((m) => ({
+      id: m.id,
+      name: m.nameKr,
+      jobRole: m.jobRole ? `${m.jobLevel}(${m.jobRole})` : m.jobLevel || '사원',
+      parentName: m.department?.name || '',
+      teamName: m.team?.name || '',
+    }));
   }
 }

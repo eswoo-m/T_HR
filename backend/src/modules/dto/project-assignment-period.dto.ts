@@ -1,9 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { formatDate } from '../utils/date.util';
+import { formatDate } from '../../common/utils/date.util';
 import { IsOptional, IsString } from 'class-validator';
 
 export class ProjectAssignmentPeriodDto {
+  @ApiProperty({ example: 1, description: '고유 ID' })
+  @IsOptional()
+  id?: number;
+
   @ApiProperty({ example: 'hg.jeong', description: '직원 ID' })
   @IsOptional()
   @IsString()

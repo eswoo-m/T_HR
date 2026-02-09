@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { ProjectAssignmentPeriodDto } from '@common/dto/project-assignment-period.dto';
+import { ProjectAssignmentPeriodDto } from './project-assignment-period.dto';
 import { Type } from 'class-transformer';
 
 /**
@@ -33,6 +33,6 @@ export class ProjectAssignmentDto {
   })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => ProjectAssignmentPeriodDto) // ✅ 위에서 정의한 클래스를 참조
-  projectAssignment: ProjectAssignmentPeriodDto[];
+  @Type(() => ProjectAssignmentPeriodDto)
+  projectAssignmentPeriod: ProjectAssignmentPeriodDto[];
 }

@@ -1,11 +1,12 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { QueryCustomerDto } from './dto/query-customer.dto';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { formatDate } from '../../../common/utils/date.util';
 import { CustomerWithCounts } from '../../../types/customer-with-counts.interface';
-import { CustomerListItemDto, CustomerSummaryDto, CustomerDetailResponseDto } from './dto/customer-response.dto';
+import { CustomerListItemDto, CustomerSummaryDto } from './dto/customer-response.dto';
+import { CustmerDto } from '../../dto/custmer.dto';
 
 @Injectable()
 export class CustomerService {
@@ -87,11 +88,18 @@ export class CustomerService {
   }
 
   // 고객사 상세 정보
-  async get(id: number): Promise<CustomerDetailResponseDto> {
+  async get(id: number): Promise<CustmerDto> {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
         contacts: {
+          include: {
+            projectContacts: {
+              include: {
+                project: true,
+              },
+            },
+          },
           orderBy: { isPrimary: 'desc' }, // 주담당자가 맨 위로 오게 정렬
         },
         projects: {
@@ -104,8 +112,7 @@ export class CustomerService {
       throw new NotFoundException('존재하지 않는 고객사입니다.');
     }
 
-    // 데이터 가공 (Entity -> DTO)
-    const result: CustomerDetailResponseDto = {
+    const result: CustmerDto = {
       id: customer.id,
       name: customer.name,
       businessNo: customer.businessNo ?? '',
@@ -114,6 +121,7 @@ export class CustomerService {
       fax: customer.fax ?? '',
       address: customer.address ?? '',
       homepage: customer.homepage ?? '',
+      industry: customer.industry ?? '',
       status: customer.status,
       remarks: customer.remarks ?? '',
       regTime: customer.regTime,
@@ -128,6 +136,15 @@ export class CustomerService {
         phone: c.phone ?? '',
         remarks: c.remarks ?? '',
         isPrimary: !!c.isPrimary,
+        projectContacts: c.projectContacts
+          ? c.projectContacts.map((pc) => ({
+              id: pc.id,
+              projectId: pc.projectId,
+              projectName: pc.project?.name ?? '알 수 없는 프로젝트', // ⭐️ 참조한 프로젝트명 삽입
+              contactId: pc.contactId,
+              regTime: pc.regTime || new Date(),
+            }))
+          : [],
       })),
 
       projects: customer.projects.map((p) => ({
@@ -135,6 +152,7 @@ export class CustomerService {
         name: p.name,
         startDate: formatDate(p.startDate),
         endDate: formatDate(p.endDate),
+        amount: p.amount ? Number(p.amount) : 0,
       })),
     };
     return result;
@@ -143,33 +161,49 @@ export class CustomerService {
   async register(dto: RegisterCustomerDto) {
     const { contacts, ...customerData } = dto;
 
+    if (!dto.businessNo) {
+      throw new BadRequestException('사업자등록번호는 필수입니다.');
+    }
+
     // 트랜잭션 시작
     return this.prisma.$transaction(async (tx) => {
+      // 2. 중복 체크
       const existingCustomer = await tx.customer.findUnique({
-        where: { businessNo: dto.businessNo }, // 스키마 필드명 확인 (businessNo 또는 business_no)
+        where: { businessNo: customerData.businessNo },
       });
 
       if (existingCustomer) {
         throw new ConflictException('이미 등록된 사업자등록번호입니다.');
       }
 
-      // 1. 고객사 기본 정보 생성
+      // 3. 고객사 생성 (DB 컬럼에 맞는 데이터만 전달)
       const customer = await tx.customer.create({
         data: {
-          ...customerData,
-          // 2. 담당자 목록이 있을 경우 함께 생성 (Relation Create)
-          contacts: {
-            create: contacts.map((contact) => ({
-              name: contact.name,
-              jobRole: contact.jobRole,
-              department: contact.department,
-              email: contact.email,
-              phone: contact.phone,
-              tel: contact.tel,
-              remarks: contact.remarks,
-              isPrimary: contact.isPrimary,
-            })),
-          },
+          name: customerData.name,
+          businessNo: customerData.businessNo,
+          ceoName: customerData.ceoName,
+          address: customerData.address,
+          industry: customerData.industry,
+          tel: customerData.tel,
+          fax: customerData.fax,
+          homepage: customerData.homepage,
+          remarks: customerData.remarks,
+          // 담당자 생성 로직
+          contacts:
+            contacts && contacts.length > 0
+              ? {
+                  create: contacts.map((contact) => ({
+                    name: contact.name,
+                    jobRole: contact.jobRole || '',
+                    department: contact.department || '',
+                    email: contact.email || '',
+                    phone: contact.phone || '',
+                    tel: contact.tel || '',
+                    remarks: contact.remarks || '',
+                    isPrimary: contact.isPrimary ?? false,
+                  })),
+                }
+              : undefined,
         },
       });
 
@@ -181,30 +215,36 @@ export class CustomerService {
     const { contacts, ...customerData } = dto;
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. 고객사 기본 정보 수정
+      // 2. 고객사 업데이트
       const updatedCustomer = await tx.customer.update({
-        where: { id },
+        where: { id: id }, // 업데이트 대상 ID는 여기서 사용
         data: {
-          ...customerData,
-          // 2. 담당자 목록 처리: 기존 것 삭제 후 새로 생성 (가장 안전한 방식)
+          name: customerData.name,
+          businessNo: customerData.businessNo,
+          ceoName: customerData.ceoName,
+          address: customerData.address,
+          industry: customerData.industry,
+          tel: customerData.tel,
+          fax: customerData.fax,
+          homepage: customerData.homepage,
+          remarks: customerData.remarks,
+
+          // 3. 담당자 목록 처리 (기존 것 삭제 후 새로 생성하는 방식)
           contacts: contacts
             ? {
-                deleteMany: {}, // 해당 고객사의 모든 담당자 삭제
+                deleteMany: {},
                 create: contacts.map((contact) => ({
                   name: contact.name,
-                  jobRole: contact.jobRole,
-                  department: contact.department,
-                  email: contact.email,
-                  phone: contact.phone,
-                  tel: contact.tel,
-                  remarks: contact.remarks,
-                  isPrimary: contact.isPrimary,
+                  jobRole: contact.jobRole || '',
+                  department: contact.department || '',
+                  email: contact.email || '',
+                  phone: contact.phone || '',
+                  tel: contact.tel || '',
+                  remarks: contact.remarks || '',
+                  isPrimary: contact.isPrimary ?? false,
                 })),
               }
             : undefined,
-        },
-        include: {
-          contacts: true,
         },
       });
 

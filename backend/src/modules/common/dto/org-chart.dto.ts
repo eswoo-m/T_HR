@@ -8,6 +8,8 @@ export class OrgChartDto {
   id: number;
   name: string;
   level: number;
+  description: string;
+  regDate: string;
   parentId?: number | null;
   children?: OrgChartDto[];
   members?: OrgMemberDto[];
