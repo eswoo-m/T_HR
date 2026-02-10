@@ -6,12 +6,15 @@ import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { HttpExceptionFilter } from '@common/filters/http-exception.filter'; // 경로 확인 필요
+import { HttpExceptionFilter } from '@common/filters/http-exception.filter'; 
+// ✅ [추가 1] 정적 파일 서빙을 위해 필요한 모듈 임포트
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
   const logDir = 'logs';
 
-  // 1. 로그 포맷 설정
+  // 1. 로그 포맷 설정 (기존 유지)
   const fileFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.printf(({ timestamp, level, message }: any) => {
@@ -28,7 +31,8 @@ async function bootstrap() {
   );
 
   // 2. Nest 애플리케이션 생성
-  const app = await NestFactory.create(AppModule, {
+  // ✅ [수정 1] 제네릭 타입 <NestExpressApplication> 추가 (useStaticAssets 사용을 위해 필수)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger({
       transports: [
         new winston.transports.Console({ format: consoleFormat }),
@@ -61,6 +65,12 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // ✅ [추가 2] 정적 파일(이미지) 서빙 설정
+  // 설명: 브라우저에서 /uploads/... 로 요청이 오면 프로젝트 루트의 uploads 폴더 내용을 보여줍니다.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -79,13 +89,18 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // 4. Swagger 설정
-  const config = new DocumentBuilder().setTitle('T_HR').setDescription('The T_HR API description').setVersion('1.0').addBearerAuth({ type: 'http', scheme: 'bearer', name: 'JWT', in: 'header' }, 'access-token').build();
+  // 4. Swagger 설정 (기존 유지)
+  const config = new DocumentBuilder()
+    .setTitle('T_HR')
+    .setDescription('The T_HR API description')
+    .setVersion('1.0')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', name: 'JWT', in: 'header' }, 'access-token')
+    .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // 5. 포트 설정 및 실행
+  // 5. 포트 설정 및 실행 (기존 유지)
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') || 3000;
 

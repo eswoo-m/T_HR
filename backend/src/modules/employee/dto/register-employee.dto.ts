@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, Matches, IsEmail, IsNotEmpty, IsBoolean, IsString, IsOptional, IsDateString, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// 하위DTO
+// 1. 하위 DTO: 전직장 경력
 export class PreProjectAssignmentDto {
   @ApiProperty({ description: '직장명', example: '(주)티벨' })
   @IsString()
@@ -39,6 +39,7 @@ export class PreProjectAssignmentDto {
   assignedTask: string;
 }
 
+// 2. 하위 DTO: 자격증
 export class CertificateDto {
   @ApiProperty({ description: '구분 코드 (CERT: 취득, COMPL: 수료)', example: 'CERT' })
   @IsString()
@@ -67,7 +68,7 @@ export class CertificateDto {
   attachmentPaths?: string;
 }
 
-// 메인DTO
+// 3. 메인 DTO: 신규 사원 등록
 export class RegisterEmployeeDto {
   @ApiProperty({ description: 'ID', example: 'gd.hong' })
   @IsString()
@@ -195,6 +196,7 @@ export class RegisterEmployeeDto {
   @IsOptional()
   major?: string;
 
+  // --- 하위 DTO 중첩 ---
   @ApiPropertyOptional({ type: [PreProjectAssignmentDto], description: '전직장 경력 목록' })
   @IsArray()
   @IsOptional()
@@ -212,6 +214,23 @@ export class RegisterEmployeeDto {
   @ApiProperty({ description: '결혼 상태 코드 (CommonCode)', example: 'SINGLE' })
   @IsOptional()
   maritalStatus?: string;
+  
+  // 📆 [추가] 결혼기념일 필드 (서비스 로직에 weddingAnniv 매핑이 있어 추가 필요)
+  @ApiPropertyOptional({ description: '결혼기념일 (YYYY-MM-DD)', example: '2020-05-20' })
+  @IsDateString()
+  @IsOptional()
+  weddingAnniv?: string;
+
+  // 📞 [추가] 비상연락망 (서비스 로직에 매핑이 있어 추가 필요)
+  @ApiPropertyOptional({ description: '비상연락처', example: '010-9999-9999' })
+  @IsString()
+  @IsOptional()
+  emergencyPhone?: string;
+
+  @ApiPropertyOptional({ description: '비상연락망 관계', example: '배우자' })
+  @IsString()
+  @IsOptional()
+  emergencyRelation?: string;
 
   @ApiPropertyOptional({ description: '전(SW) 경력 (개월)', example: 12 })
   @IsOptional()
@@ -232,10 +251,16 @@ export class RegisterEmployeeDto {
   @IsOptional()
   addressDetail?: string;
 
-  @ApiPropertyOptional({ description: '프로필 사진 경로', example: '/uploads/profiles/2026/01/photo.jpg' })
+  @ApiPropertyOptional({ description: '프로필 사진 경로 (직접 입력 시)', example: '/uploads/profiles/2026/01/photo.jpg' })
   @IsString()
   @IsOptional()
   profilePath?: string;
+
+  // 📸 [추가됨] 프론트엔드에서 보내는 Base64 이미지 데이터
+  @ApiPropertyOptional({ description: '프로필 이미지 Base64 데이터', example: 'data:image/png;base64,iVBORw0KGgo...' })
+  @IsString()
+  @IsOptional()
+  profileImageBase64?: string;
 
   @ApiPropertyOptional({ description: '할당할 자산 ID 목록', example: '[1, 5, 10]' })
   @IsArray()

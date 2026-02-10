@@ -1,15 +1,14 @@
-import { Injectable } from '@nestjs/common';
-import { ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { getKstDate } from '@common/utils/date.util';
+import { getKstDate, calculateTotalCareerMonths } from '@common/utils/date.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterEmployeeDto } from './dto/register-employee.dto';
 import { QueryEmployeeDto, CareerRange } from './dto/query-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
-import { calculateTotalCareerMonths } from '@common/utils/date.util';
 import { getErrorMessage } from '@common/utils/error.util';
-
+// 📸 [추가] 사진 저장을 위한 유틸리티 임포트 (필수)
+import { saveProfileImage } from '@common/utils/file-upload.util';
 import * as bcrypt from 'bcrypt';
 
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
@@ -39,11 +38,11 @@ type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
 export class EmployeeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 계정생성
+  // 1. 계정생성 (신규 사원 등록)
   async register(dto: RegisterEmployeeDto, adminId: string) {
     const TODAY = getKstDate();
 
-    // 1. 중복 체크 (id, no, residentNo)
+    // 1-1. 중복 체크 (id, no, residentNo)
     const existing = await this.prisma.employee.findFirst({
       where: {
         OR: [{ id: dto.id }, { no: dto.no }, { AND: [{ residentNo: dto.residentNo }, { exitDate: null }] }],
@@ -54,6 +53,15 @@ export class EmployeeService {
       if (existing.id === dto.id) throw new ConflictException('이미 사용 중인 아이디입니다.');
       if (existing.no === dto.no) throw new ConflictException('이미 사용 중인 사번입니다.');
       throw new ConflictException('이미 등록된 주민번호입니다.');
+    }
+
+    // 📸 [추가] 사진 업로드 처리 로직 (Base64 -> 파일 저장 -> 경로 반환)
+    let savedProfilePath = dto.profilePath; 
+    if (dto.profileImageBase64) {
+      const uploadedPath = saveProfileImage(dto.profileImageBase64, dto.no);
+      if (uploadedPath) {
+        savedProfilePath = uploadedPath; 
+      }
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -93,19 +101,19 @@ export class EmployeeService {
             hrStatus: dto.hrStatus || 'EMPLOYED',
             skillLevel: dto.skillLevel || '초급',
 
-            // ✅ [추가됨] 최종 학력 저장
+            // ✅ 최종 학력 저장
             eduLevel: dto.eduLevel,
-
             lastSchool: dto.lastSchool,
             major: dto.major,
-            // previousExperiences: dto.previousExperiences,
-            // certificates: dto.certificates,
+            
             maritalStatus: dto.maritalStatus,
             totalSwExperience: dto.totalSwExperience || 0,
             zipCode: dto.zipCode,
             address: dto.address,
             addressDetail: dto.addressDetail,
-            profilePath: dto.profilePath,
+            
+            // 📸 [수정] 저장된 이미지 경로 사용
+            profilePath: savedProfilePath,
           },
         });
 
@@ -196,7 +204,7 @@ export class EmployeeService {
     });
   }
 
-  // 인사관리 정보조회
+  // 2. 인사관리 정보조회
   async query(filter: QueryEmployeeDto) {
     try {
       const { departmentId, teamId, searchKeyword, skillLevel, assignStatus, careerRange } = filter;
@@ -228,10 +236,13 @@ export class EmployeeService {
 
         return {
           id: emp.id,
+          no: emp.no, // 사번 정보 포함
           name: emp.nameKr,
-          department: true,
-          team: true,
+          // 🛠️ [수정] true 대신 실제 부서/팀 이름을 반환하도록 변경 (화면 표시용)
+          department: emp.department?.name || '미지정',
+          team: emp.team?.name || '-',
           jobRol: emp.jobRole,
+          position: emp.jobLevel, // 직급 정보 매핑
           assignStatus: emp.assignStatus,
           skillLevel: emp.employeeDetail?.skillLevel || '미등록',
           count: emp._count?.certificates ?? 0,
@@ -247,6 +258,7 @@ export class EmployeeService {
     }
   }
 
+  // 3. 사원 상세 조회 (기존 유지)
   async get(id: string): Promise<EmployeeDetailResponseDto> {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
@@ -277,6 +289,7 @@ export class EmployeeService {
     return this.mapToDetailDto(employee as EmployeeWithRelations);
   }
 
+  // 4. 정보 수정 (기존 유지)
   async update(id: string, dto: UpdateEmployeeDto) {
     return this.prisma.$transaction(async (tx) => {
       // 1. 사원 기본 정보 (반드시 존재하므로 update)
@@ -304,7 +317,7 @@ export class EmployeeService {
           type: dto.type,
           hrStatus: dto.hrStatus,
 
-          // ✅ [추가됨] 최종 학력 수정
+          // ✅ 최종 학력 수정
           eduLevel: dto.eduLevel,
 
           lastSchool: dto.lastSchool,
@@ -400,6 +413,8 @@ export class EmployeeService {
       // 7. 부서나 직급 변경시 조직히스토리
     });
   }
+
+  // --- 헬퍼 함수들 (경력 체크, 기간 계산, DTO 매핑) ---
 
   /** 경력 구간 체크 함수 */
   private isWithinCareerRange(years: number, range: CareerRange): boolean {
