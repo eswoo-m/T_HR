@@ -184,6 +184,7 @@ export class CustomerService {
           ceoName: customerData.ceoName,
           address: customerData.address,
           industry: customerData.industry,
+          status: customerData.status,
           tel: customerData.tel,
           fax: customerData.fax,
           homepage: customerData.homepage,
@@ -253,7 +254,6 @@ export class CustomerService {
   }
 
   async delete(id: number) {
-    // 1. 삭제 전 해당 고객사가 존재하는지 확인
     const customer = await this.prisma.customer.findUnique({
       where: { id },
     });
@@ -262,10 +262,11 @@ export class CustomerService {
       throw new NotFoundException(`ID가 ${id}인 고객사를 찾을 수 없습니다.`);
     }
 
-    // schema.prisma에 onDelete: Cascade가 설정되어 있어
-    // 연결된 customer_contact 데이터도 자동으로 함께 삭제됩니다.
-    await this.prisma.customer.delete({
+    await this.prisma.customer.update({
       where: { id },
+      data: {
+        status: 'TERMINATED',
+      },
     });
 
     return { message: '고객사 정보와 관련 담당자 정보가 모두 삭제되었습니다.', id };

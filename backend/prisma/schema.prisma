@@ -83,9 +83,9 @@ model Employee {
   phone        String?
 
   // ✅ 관계 설정
-  org          Organization? @relation("EmployeeToOrganization", fields: [deptId], references: [id])
-  department   Organization? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
-  team         Organization? @relation("EmployeeTeam", fields: [teamId], references: [id])
+  org        Organization? @relation("EmployeeToOrganization", fields: [deptId], references: [id])
+  department Organization? @relation("EmployeeDepartment", fields: [departmentId], references: [id])
+  team       Organization? @relation("EmployeeTeam", fields: [teamId], references: [id])
 
   assets                      Asset[]
   ownedFiles                  Attachment[]                  @relation("EmployeeFiles")
@@ -110,29 +110,29 @@ model Employee {
 }
 
 model EmployeeDetail {
-  id                Int       @id @default(autoincrement())
-  employeeId        String    @unique @map("employee_id")
-  type              String    @default("정규직") @map("type")
-  hrStatus          String    @default("재직") @map("hr_status")
-  skillLevel        String    @default("초급") @map("skill_level")
-  leaveStartDate    DateTime? @map("leave_start_date") @db.Date
-  leaveEndDate      DateTime? @map("leave_end_date") @db.Date
-  eduLevel          String?   @map("edu_level")
-  lastSchool        String?   @map("last_school")
+  id                Int         @id @default(autoincrement())
+  employeeId        String      @unique @map("employee_id")
+  type              String      @default("정규직") @map("type")
+  hrStatus          String      @default("재직") @map("hr_status")
+  skillLevel        String      @default("초급") @map("skill_level")
+  leaveStartDate    DateTime?   @map("leave_start_date") @db.Date
+  leaveEndDate      DateTime?   @map("leave_end_date") @db.Date
+  eduLevel          String?     @map("edu_level")
+  lastSchool        String?     @map("last_school")
   major             String?
-  entranceDate      DateTime? @map("entrance_date") @db.Date
-  graduationDate    DateTime? @map("graduation_date") @db.Date
-  totalSwExperience Int?      @default(0) @map("total_sw_experience")
-  prevSwExperience  Int?      @default(0) @map("prev_sw_experience")
-  maritalStatus     String?   @map("marital_status")
-  weddingAnniv      DateTime? @map("wedding_anniv") @db.Date
-  emergencyPhone    String?   @map("emergency_phone")
-  emergencyRelation String?   @map("emergency_relation")
-  zipCode           String?   @map("zip_code")
+  entranceDate      DateTime?   @map("entrance_date") @db.Date
+  graduationDate    DateTime?   @map("graduation_date") @db.Date
+  totalSwExperience Int?        @default(0) @map("total_sw_experience")
+  prevSwExperience  Int?        @default(0) @map("prev_sw_experience")
+  maritalStatus     String?     @map("marital_status")
+  weddingAnniv      DateTime?   @map("wedding_anniv") @db.Date
+  emergencyPhone    String?     @map("emergency_phone")
+  emergencyRelation String?     @map("emergency_relation")
+  zipCode           String?     @map("zip_code")
   address           String?
-  addressDetail     String?   @map("address_detail")
-  remarks           String?   @map("remarks") @db.Text
-  profilePath       String?   @map("profile_path")
+  addressDetail     String?     @map("address_detail")
+  remarks           String?     @map("remarks") @db.Text
+  profilePath       String?     @map("profile_path")
   commonCodeId      Int?
   CommonCode        CommonCode? @relation(fields: [commonCodeId], references: [id])
   employee          Employee    @relation(fields: [employeeId], references: [id])
@@ -141,26 +141,26 @@ model EmployeeDetail {
 }
 
 model Project {
-  id            Int           @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   name          String
-  customerId    Int?          @map("customer_id")
+  customerId    Int?      @map("customer_id")
   department_id Int?
-  teamId        Int?          @map("team_id")
-  regTime       DateTime      @default(now()) @map("reg_time")
-  startDate     DateTime?     @map("start_date") @db.Date
-  endDate       DateTime?     @map("end_date") @db.Date
-  headcount     Int?          @default(0)
-  amount        Decimal       @db.Decimal(15, 2)
+  teamId        Int?      @map("team_id")
+  regTime       DateTime  @default(now()) @map("reg_time")
+  startDate     DateTime? @map("start_date") @db.Date
+  endDate       DateTime? @map("end_date") @db.Date
+  headcount     Int?      @default(0)
+  amount        Decimal   @db.Decimal(15, 2)
   status        String?
   location      String?
-  taskName      String?       @map("task_name")
-  taskSummary   String?       @map("task_summary") @db.Text
-  remarks       String?       @map("remarks") @db.Text
+  taskName      String?   @map("task_name")
+  taskSummary   String?   @map("task_summary") @db.Text
+  remarks       String?   @map("remarks") @db.Text
 
   // ✅ 서비스 코드 호환용 관계 설정
-  customer      Customer?     @relation(fields: [customerId], references: [id])
-  team          Organization? @relation("OrganizationToProject", fields: [teamId], references: [id])
-  dept_rel      Organization? @relation("project_department_idToorganization", fields: [department_id], references: [id])
+  customer Customer?     @relation(fields: [customerId], references: [id])
+  team     Organization? @relation("OrganizationToProject", fields: [teamId], references: [id])
+  dept_rel Organization? @relation("project_department_idToorganization", fields: [department_id], references: [id])
 
   projectAssignment ProjectAssignment[]
   projectContacts   ProjectContact[]
@@ -174,17 +174,17 @@ model Project {
 }
 
 model ProjectAssignment {
-  id           Int       @id @default(autoincrement())
-  projectId    Int       @map("project_id")
-  employeeId   String    @map("employee_id")
-  startDate    DateTime  @map("start_date") @db.Date
-  endDate      DateTime? @map("end_date") @db.Date
-  assignedRole String?   @map("assigned_role")
-  tools        String?
-  workDetail   String?   @map("work_detail") @db.Text
-  contribution String?   @db.Text
-  employee     Employee  @relation(fields: [employeeId], references: [id])
-  project      Project   @relation(fields: [projectId], references: [id])
+  id                      Int                       @id @default(autoincrement())
+  projectId               Int                       @map("project_id")
+  employeeId              String                    @map("employee_id")
+  startDate               DateTime                  @map("start_date") @db.Date
+  endDate                 DateTime?                 @map("end_date") @db.Date
+  assignedRole            String?                   @map("assigned_role")
+  tools                   String?
+  workDetail              String?                   @map("work_detail") @db.Text
+  contribution            String?                   @db.Text
+  employee                Employee                  @relation(fields: [employeeId], references: [id])
+  project                 Project                   @relation(fields: [projectId], references: [id])
   projectAssignmentPeriod ProjectAssignmentPeriod[]
 
   @@map("project_assignment")
@@ -293,7 +293,7 @@ model Customer {
   fax        String?
   address    String?
   homepage   String?
-  status     String            @default("활성") @map("status")
+  status     String            @default("ACTIVE") @map("status")
   remarks    String?           @map("remarks") @db.Text
   regTime    DateTime          @default(now()) @map("reg_time")
   contacts   CustomerContact[]

@@ -47,7 +47,7 @@ export class CustmerDto {
   @IsString()
   homepage: string;
 
-  @ApiProperty({ example: '활성 / 비활성', description: '상태', required: false })
+  @ApiProperty({ example: '활성 / 휴면 / 종료', description: '상태', required: false })
   @IsOptional()
   @IsString()
   status: string;
