@@ -6,7 +6,9 @@ import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { HttpExceptionFilter } from '@common/filters/http-exception.filter'; 
+import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
+import { json, urlencoded } from 'express';
+
 // ✅ [추가 1] 정적 파일 서빙을 위해 필요한 모듈 임포트
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
@@ -90,15 +92,14 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // 4. Swagger 설정 (기존 유지)
-  const config = new DocumentBuilder()
-    .setTitle('T_HR')
-    .setDescription('The T_HR API description')
-    .setVersion('1.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', name: 'JWT', in: 'header' }, 'access-token')
-    .build();
+  const config = new DocumentBuilder().setTitle('T_HR').setDescription('The T_HR API description').setVersion('1.0').addBearerAuth({ type: 'http', scheme: 'bearer', name: 'JWT', in: 'header' }, 'access-token').build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
+
+  // 파일 용량 체크
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
 
   // 5. 포트 설정 및 실행 (기존 유지)
   const configService = app.get(ConfigService);
