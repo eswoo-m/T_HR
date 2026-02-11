@@ -43,7 +43,7 @@ export class CommonController {
   }
 
   // --- 공통 코드 관련 로직 ---
-  @Get('code')
+  @Get('codes')
   @ApiOperation({ summary: '여러 타입의 공통 코드 동시 조회', description: 'query string으로 types=TYPE1,TYPE2 전달' })
   async getMultipleCodes(@Query('types') types: string) {
     const typeArray = types ? types.split(',') : [];

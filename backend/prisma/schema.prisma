@@ -381,6 +381,7 @@ model CommonCode {
   type           String           @map("type")
   code           String           @map("code")
   name           String           @map("name")
+  attr1          String?          @map("attr1")
   isUsed         Boolean          @default(true) @map("is_used")
   regTime        DateTime         @default(now()) @map("reg_time")
   EmployeeDetail EmployeeDetail[]

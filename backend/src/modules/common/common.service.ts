@@ -288,8 +288,10 @@ export class CommonService {
         isUsed: true, // 사용 중인 코드만 필터링
       },
       select: {
+        type: true,
         code: true,
         name: true,
+        attr1: true,
       },
       orderBy: { id: 'asc' }, // 혹은 정렬용 별도 컬럼이 있다면 그것을 사용
     });
@@ -304,7 +306,12 @@ export class CommonService {
         type: { in: types },
         isUsed: true,
       },
-      select: { type: true, code: true, name: true },
+      select: {
+        type: true,
+        code: true,
+        name: true,
+        attr1: true,
+      },
       orderBy: { id: 'asc' },
     });
   }

@@ -58,7 +58,7 @@ export class CustmerDto {
   remarks: string;
 
   @ApiProperty({ example: '2026-01-01', description: '등록일자', required: false })
-  regTime: Date;
+  regDate: Date;
 
   @ApiProperty({ type: [ContactDto], description: '연결된 담당자 목록', required: false })
   @IsOptional()

@@ -100,10 +100,10 @@ export class CustomerService {
               },
             },
           },
-          orderBy: { isPrimary: 'desc' }, // 주담당자가 맨 위로 오게 정렬
+          orderBy: { isPrimary: 'desc' },
         },
         projects: {
-          orderBy: { regTime: 'desc' }, // 최신 프로젝트순
+          orderBy: { regTime: 'desc' },
         },
       },
     });
@@ -124,7 +124,7 @@ export class CustomerService {
       industry: customer.industry ?? '',
       status: customer.status,
       remarks: customer.remarks ?? '',
-      regTime: customer.regTime,
+      regDate: customer.regTime,
 
       contacts: customer.contacts.map((c) => ({
         id: c.id,
