@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ContactDto } from './contact.dto';
+import { CustomerContactDto } from './customerContactDto';
 import { ProjectAssignmentDto } from './project-assignment.dto';
 
 export class ProjectDto {
@@ -78,14 +78,14 @@ export class ProjectDto {
     2. 신규 담당자: id 없이 이름, 이메일 등 정보 전달
   `,
     example: [{ id: 7 }, { id: 8 }, { name: '이순신', email: 'new@test.com', phone: '010-9999-8888', jobRole: '차장', department: '구매부' }],
-    type: [ContactDto],
+    type: [CustomerContactDto],
     required: false,
   })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => ContactDto)
-  contacts?: ContactDto[];
+  @Type(() => CustomerContactDto)
+  customerContacts?: CustomerContactDto[];
 
   @ApiProperty({
     description: '투입 인력 상세 정보 (인력별 역할 및 상세 기간 포함)',

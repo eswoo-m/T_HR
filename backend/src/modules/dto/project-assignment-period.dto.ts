@@ -16,7 +16,7 @@ export class ProjectAssignmentPeriodDto {
   @ApiProperty({ example: '투입_정산', description: '상태' })
   @IsOptional()
   @IsString()
-  status?: string;
+  assignStatus?: string;
 
   @ApiProperty({ example: '2026-02-01', description: '상세 시작일' })
   @IsString()

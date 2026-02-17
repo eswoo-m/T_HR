@@ -16,8 +16,8 @@ export class ProjectService {
   constructor(private prisma: PrismaService) {}
 
   async register(dto: RegisterProjectDto) {
-    // 1. 구조 분해 할당 확인 (contacts로 통합해서 받기로 한 경우)000
-    const { customerId, headcount, name, amount, location, status, taskName, taskSummary, remarks, startDate, endDate, teamId, contacts, projectAssignment } = dto;
+    // 1. 구조 분해 할당 확인
+    const { customerId, headcount, name, amount, location, status, taskName, taskSummary, remarks, startDate, endDate, teamId, customerContacts, projectAssignment } = dto;
 
     // 2. 고객사 존재 여부 확인
     if (customerId) {
@@ -32,7 +32,7 @@ export class ProjectService {
     if (isExist) throw new ConflictException('해당 고객사에 이미 동일한 이름의 프로젝트가 존재합니다.');
     return this.prisma.$transaction(async (tx) => {
       // 3. 담당자(Contacts) 데이터 가공
-      const customerContactData = (contacts ?? []).map((c) => {
+      const customerContactData = (customerContacts ?? []).map((c) => {
         if (c.id) {
           return { contact: { connect: { id: c.id } } };
         } else {
@@ -101,18 +101,32 @@ export class ProjectService {
         ...(keyword
           ? [
               {
-                OR: [{ name: { contains: keyword, mode: 'insensitive' as const } }, { customer: { name: { contains: keyword, mode: 'insensitive' as const } } }],
-              },
+                OR: [
+                  { name: { contains: keyword, mode: 'insensitive' as const } },
+                  { customer: { name: { contains: keyword, mode: 'insensitive' as const } } },
+                  {
+                    projectAssignment: {
+                      some: {
+                        employee: {
+                          is: {
+                            name: { contains: keyword, mode: 'insensitive' as const },
+                          },
+                        },
+                      },
+                    },
+                  },
+                ],
+              } as Prisma.ProjectWhereInput,
             ]
           : []),
 
-        // 2. 부서 및 팀 필터 (Organization 관계 활용)
-        ...(teamId ? [{ teamId: teamId }] : []),
+        // 2. 부서 및 팀 필터 (Number 변환 처리 ㅋ)
+        ...(teamId ? [{ teamId: Number(teamId) }] : []),
         ...(departmentId && !teamId
           ? [
               {
                 team: {
-                  OR: [{ id: departmentId }, { parentId: departmentId }],
+                  OR: [{ id: Number(departmentId) }, { parentId: Number(departmentId) }],
                 },
               },
             ]
@@ -126,14 +140,14 @@ export class ProjectService {
           ? [
               {
                 headcount: {
-                  gte: minHeadcount ?? 0,
-                  ...(maxHeadcount && { lte: maxHeadcount }),
+                  gte: Number(minHeadcount ?? 0),
+                  ...(maxHeadcount && { lte: Number(maxHeadcount) }),
                 },
               },
             ]
           : []),
 
-        // 5. 날짜 범위 검색 (프로젝트 기간 내 포함 여부)
+        // 5. 날짜 범위 검색
         ...(startDate ? [{ startDate: { gte: new Date(startDate) } }] : []),
         ...(endDate ? [{ endDate: { lte: new Date(endDate) } }] : []),
 
@@ -142,8 +156,8 @@ export class ProjectService {
           ? [
               {
                 amount: {
-                  gte: minAmount ?? 0,
-                  ...(maxAmount && { lte: maxAmount }),
+                  gte: Number(minAmount ?? 0),
+                  ...(maxAmount && { lte: Number(maxAmount) }),
                 },
               },
             ]
@@ -158,19 +172,24 @@ export class ProjectService {
         team: {
           select: {
             name: true,
-            parent: { select: { name: true } }, // 부서명을 가져오기 위해 상위 조직 포함
+            parent: { select: { name: true } },
+          },
+        },
+        projectAssignment: {
+          select: {
+            employee: {
+              select: { nameKr: true },
+            },
           },
         },
       },
       orderBy: { regTime: 'desc' },
     });
 
-    // 데이터 가공: 목록 구성 (프로젝트명, 고객사, 부서명, 팀명, 상태, 기간, 예산, 인력)
     return projects.map((p) => ({
       id: p.id,
       projectName: p.name,
       customerName: p.customer?.name ?? '-',
-      // 부서명/팀명 구분 로직
       departmentName: p.team?.parent?.name ?? p.team?.name ?? '-',
       teamName: p.team?.parent ? p.team.name : '-',
       status: p.status,
@@ -179,6 +198,7 @@ export class ProjectService {
       period: `${p.startDate?.toISOString().split('T')[0] ?? ''} ~ ${p.endDate?.toISOString().split('T')[0] ?? '진행중'}`,
       amount: p.amount,
       headcount: p.headcount,
+      memberNames: p.projectAssignment.map((pa) => pa.employee.nameKr).join(', '),
     }));
   }
 
@@ -257,10 +277,10 @@ export class ProjectService {
 
     if (!project) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
 
-    // 헬퍼: 날짜 포맷 ㅋ
+    // 헬퍼: 날짜 포맷
     const formatDate = (date: Date | string | null) => (date ? new Date(date).toISOString().substring(0, 10) : '');
 
-    // 1️⃣ basicInfo 매핑 ㅋ
+    // 1️⃣ basicInfo 매핑
     const basicInfo: ProjectBasicInfoDto = {
       id: project.id,
       name: project.name,
@@ -286,7 +306,7 @@ export class ProjectService {
       })),
     };
 
-    // 2️⃣ members 매핑 (메서드 분리 추천 ㅋ)
+    // 2️⃣ members 매핑
     const members: ProjectMemberDto[] = (project.projectAssignment || []).map((pa) => ({
       id: pa.id,
       employeeId: pa.employee.id,
@@ -301,7 +321,7 @@ export class ProjectService {
         employeeId: pa.employee.id,
         startDate: formatDate(p.startDate),
         endDate: formatDate(p.endDate),
-        status: p.status ?? '',
+        assignStatus: p.status ?? '',
       })),
     }));
 
@@ -312,7 +332,7 @@ export class ProjectService {
   }
 
   async update(id: number, dto: UpdateProjectDto) {
-    const { endDate, status, teamId, location, taskSummary, remarks, projectAssignment } = dto;
+    const { startDate, endDate, status, teamId, location, amount, taskName, taskSummary, remarks, projectAssignment, customerContacts, customerId } = dto;
 
     try {
       return this.prisma.$transaction(async (tx) => {
@@ -321,19 +341,47 @@ export class ProjectService {
         if (!currentProject) throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
 
         // 2. 인력 데이터 변경 여부 확인
-        // projectAssignment가 배열로 들어왔을 때만 기존 데이터를 삭제하고 새로 생성합니다.
         const isMembersUpdated = Array.isArray(projectAssignment);
+        const isContactsUpdated = Array.isArray(customerContacts);
 
         // 3. 기존 데이터 초기화 (상세 기간 -> 인력 순으로 삭제)
         if (isMembersUpdated) {
-          // 상세 기간(Period) 먼저 삭제
           await tx.projectAssignmentPeriod.deleteMany({
             where: { assignment: { projectId: id } },
           });
-          // 인력 투입(Assignment) 삭제
           await tx.projectAssignment.deleteMany({
             where: { projectId: id },
           });
+        }
+
+        if (isContactsUpdated) {
+          await tx.projectContact.deleteMany({ where: { projectId: id } });
+        }
+
+        let projectContactData: Prisma.ProjectContactCreateWithoutProjectInput[] = [];
+
+        if (isContactsUpdated && customerContacts) {
+          projectContactData = customerContacts.map((c) => {
+            if (c.id) {
+              return { contact: { connect: { id: c.id } } };
+            } else {
+              return {
+                contact: {
+                  create: {
+                    name: c.name,
+                    jobRole: c.jobRole,
+                    department: c.department,
+                    tel: c.tel,
+                    email: c.email,
+                    phone: c.phone,
+                    remarks: c.remarks,
+                    isPrimary: c.isPrimary || false,
+                    customer: { connect: { id: customerId || currentProject.customerId } },
+                  },
+                },
+              };
+            }
+          }) as Prisma.ProjectContactCreateWithoutProjectInput[];
         }
 
         // 4. 프로젝트 정보 및 인력 데이터 업데이트
@@ -343,12 +391,15 @@ export class ProjectService {
             teamId: teamId ?? undefined,
             status: status ?? undefined,
             location: location ?? undefined,
+            amount: amount ?? 0,
+            taskName: taskName ?? undefined,
             taskSummary: taskSummary ?? undefined,
             remarks: remarks ?? undefined,
+            startDate: startDate ? new Date(startDate) : endDate === null ? null : undefined,
             endDate: endDate ? new Date(endDate) : endDate === null ? null : undefined,
 
-            // ✅ 공통 DTO 구조를 활용한 중첩 생성(Nested Create)
             projectAssignment: isMembersUpdated ? this.formatAssignmentData(projectAssignment) : undefined,
+            projectContacts: isContactsUpdated ? { create: projectContactData } : undefined,
           },
           include: {
             team: true,
@@ -471,7 +522,7 @@ export class ProjectService {
       await tx.projectAssignmentPeriod.createMany({
         data: updateDto.periods.map((p) => ({
           assignmentId: assignmentId,
-          status: p.status,
+          status: p.assignStatus,
           startDate: new Date(p.startDate),
           endDate: p.endDate ? new Date(p.endDate) : null,
         })),
@@ -510,7 +561,7 @@ export class ProjectService {
         assignedRole: pa.assignedRole || '팀원',
         projectAssignmentPeriod: {
           create: (pa.projectAssignmentPeriod ?? []).map((period) => ({
-            status: period.status || '투입_정산',
+            status: period.assignStatus || 'ASSIGNED_SETTLEMENT',
             startDate: new Date(period.startDate),
             endDate: period.endDate ? new Date(period.endDate) : null,
           })),

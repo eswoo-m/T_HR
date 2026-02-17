@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional, IsString } from 'class-validator';
-import { ContactDto } from './contact.dto';
+import { CustomerContactDto } from './customerContactDto';
 import { ProjectDto } from './project.dto';
 
 export class CustmerDto {
@@ -60,9 +60,9 @@ export class CustmerDto {
   @ApiProperty({ example: '2026-01-01', description: '등록일자', required: false })
   regDate: Date;
 
-  @ApiProperty({ type: [ContactDto], description: '연결된 담당자 목록', required: false })
+  @ApiProperty({ type: [CustomerContactDto], description: '연결된 담당자 목록', required: false })
   @IsOptional()
-  contacts: ContactDto[];
+  contacts: CustomerContactDto[];
 
   @ApiProperty({ type: [ProjectDto], description: '프로젝트 이력 목록', required: false })
   @IsOptional()

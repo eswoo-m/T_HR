@@ -56,20 +56,7 @@ export class OrganizationService {
       include: {
         children: true,
         employee: true,
-        /* [임시 주석] DB에 team_id 컬럼 누락으로 인한 에러 방지
-        projects: {
-          where: {
-            OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
-          },
-          select: {
-            id: true,
-            name: true,
-            startDate: true,
-            endDate: true,
-            status: true,
-          },
-        },
-        */
+        // _count는 그대로 유지 ㅋ
         _count: {
           select: { employee: true },
         },
@@ -81,24 +68,14 @@ export class OrganizationService {
     return {
       id: org.id,
       name: org.name,
-      memberCount: org.employee.length,
-      activeProject: (() => {
-        // [임시 우회] projects 데이터를 참조하지 않도록 수정
-        const allProjects: any[] = []; 
-        if (allProjects.length === 0) return null;
+      memberCount: org._count.employee,
 
-        const p = allProjects[0];
-        return {
-          id: p.id,
-          name: p.name,
-          period: `${p.startDate ? p.startDate.toISOString().split('T')[0] : ''} ~ ${p.endDate ? p.endDate.toISOString().split('T')[0] : '진행중'}`,
-        };
-      })(),
+      activeProject: null,
 
       subOrganizations: org.children.map((c) => ({
         id: c.id,
         name: c.name,
-        description: c.desc || '',
+        description: c.desc ?? '',
       })),
 
       members: org.employee.map((e) => ({
@@ -153,9 +130,9 @@ export class OrganizationService {
       });
 
       if (!oldOrg) throw new NotFoundException('해당 부서를 찾을 수 없습니다.');
-      
+
       // [임시 우회]
-      const activeProjects: any[] = []; 
+      const activeProjects: any[] = [];
       if (activeProjects.length > 0) {
         const projectNames = activeProjects.map((p) => p.name).join(', ');
         throw new BadRequestException(`진행 중인 프로젝트(${projectNames})가 있어 처리가 불가능합니다.`);

@@ -157,7 +157,6 @@ model Project {
   taskSummary   String?   @map("task_summary") @db.Text
   remarks       String?   @map("remarks") @db.Text
 
-  // ✅ 서비스 코드 호환용 관계 설정
   customer Customer?     @relation(fields: [customerId], references: [id])
   team     Organization? @relation("OrganizationToProject", fields: [teamId], references: [id])
   dept_rel Organization? @relation("project_department_idToorganization", fields: [department_id], references: [id])

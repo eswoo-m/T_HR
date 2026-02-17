@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsNumber, IsBoolean, IsArray } from 'class-valida
 import { ApiProperty } from '@nestjs/swagger';
 import { ProjectContactDto } from './project-contact.dto';
 
-export class ContactDto {
+export class CustomerContactDto {
   @ApiProperty({ example: 101, required: false })
   @IsOptional()
   @IsNumber() // 💡 데코레이터가 있어야 파싱됩니다!
