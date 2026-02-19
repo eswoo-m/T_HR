@@ -1,33 +1,22 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 // import { Prisma } from '@prisma/client';
 import { TeamStructureDto } from 'src/modules/common/dto/team-structure.dto';
 import { OrgChartDto } from 'src/modules/common/dto/org-chart.dto';
 import { formatDate } from '@common/utils/date.util';
 
-// interface OrganizationWithChildren extends Organization {
-//   level: number;
-//   children?: OrganizationWithChildren[];
-//   employee?: any[];
-// }
-
-// type OrganizationWithMembers = Prisma.OrganizationGetPayload<{
-//   include: {
-//     employee: {
-//       select: { id: true; nameKr: true; jobRole: true };
-//     };
-//   };
-// }>;
-
 @Injectable()
 export class CommonService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ===========================================================================
+  // [Section 1] 기존 기능 유지: 조직(Organization) 및 팀 구조 관련 로직
+  // ===========================================================================
 
   async getOrganizationStructure(teamId: number): Promise<TeamStructureDto> {
     const team = await this.prisma.organization.findUnique({
       where: { id: teamId },
       include: {
-        // 1. 하위 팀(Children) 조회
         children: {
           select: {
             id: true,
@@ -35,7 +24,6 @@ export class CommonService {
             _count: { select: { employee: true } },
           },
         },
-        // 2. 소속 구성원(Employees) 조회
         employee: {
           where: {
             employeeDetail: {
@@ -154,106 +142,15 @@ export class CommonService {
       };
       setLevel(rootNodes, 1);
 
-      // 7. 디버그 로그 (직원 Map 확인용)
-      if (includeMembers) {
-        // console.log('=== Employee Map ===');
-        empMap.forEach((emps, deptId) => {
-          console.log(
-            `deptId: ${deptId}, employees:`,
-            emps.map((e) => e.nameKr),
-          );
-        });
-      }
-
       return rootNodes;
     } catch (error: unknown) {
       throw new InternalServerErrorException(error instanceof Error ? error.message : '조직도 조회 중 오류');
     }
   }
 
-  // 조직도
-  // async getOrganizationChart(includeMembers: boolean): Promise<OrgChartDto[]> {
-  //   try {
-  //     const rawOrgs = await this.prisma.organization.findMany({
-  //       include: {
-  //         employee: includeMembers
-  //           ? {
-  //               where: { employeeDetail: { is: { hrStatus: 'EMPLOYED' } } },
-  //               select: { id: true, nameKr: true, jobRole: true },
-  //             }
-  //           : false,
-  //       },
-  //     });
-  //
-  //     const allOrgs = rawOrgs as unknown as OrganizationWithMembers[];
-  //     const orgMap = new Map<number, OrgChartDto>();
-  //
-  //     for (const org of allOrgs) {
-  //       const node: OrgChartDto = {
-  //         id: org.id,
-  //         name: org.name,
-  //         level: 0,
-  //         description: org.desc || '',
-  //         regDate: formatDate(org.regTime) || '',
-  //         children: [],
-  //         members:
-  //           includeMembers && org.employee
-  //             ? org.employee.map((emp) => ({
-  //                 id: emp.id,
-  //                 nameKr: emp.nameKr,
-  //                 jobRole: emp.jobRole ?? '',
-  //               }))
-  //             : undefined,
-  //       };
-  //       orgMap.set(org.id, node);
-  //     }
-  //
-  //     const rootNodes: OrgChartDto[] = [];
-  //     allOrgs.forEach((org) => {
-  //       const currentNode = orgMap.get(org.id)!;
-  //
-  //       if (org.parentId === null) {
-  //         // 최상위 노드인 경우 루트 배열에 추가
-  //         rootNodes.push(currentNode);
-  //       } else {
-  //         // 부모가 있는 경우, Map에서 부모를 찾아 그 자식 배열에 현재 노드를 push
-  //         const parentNode = orgMap.get(org.parentId);
-  //         if (parentNode) {
-  //           parentNode.children!.push(currentNode);
-  //         }
-  //       }
-  //     });
-  //
-  //     // 5. 재귀 함수를 이용해 레벨(level)을 정확히 계산
-  //     const setLevel = (nodes: OrgChartDto[], level: number) => {
-  //       nodes.forEach((node) => {
-  //         node.level = level;
-  //         if (node.children && node.children.length > 0) {
-  //           setLevel(node.children, level + 1);
-  //         }
-  //       });
-  //     };
-  //
-  //     setLevel(rootNodes, 1);
-  //
-  //     return rootNodes;
-  //   } catch (error: unknown) {
-  //     throw new InternalServerErrorException(error instanceof Error ? error.message : '조직도 조회 중 오류');
-  //   }
-  // }
-
-  // 팀 목록: 선택된 부서 ID로 필터링
   async getRootOrganizations() {
     return this.prisma.organization.findMany({
       where: { parentId: { not: null }, parent: { parentId: null } },
-      // where: {
-      //   // 1. 최상위(회사) 제외
-      //   parentId: { not: null },
-      //   // 2. 하위 조직(팀 또는 하부서)이 하나라도 존재하는 경우만 조회
-      //   children: {
-      //     some: {},
-      //   },
-      // },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -275,45 +172,6 @@ export class CommonService {
     }
 
     return department.children;
-  }
-
-  /**
-   * 특정 카테고리(type)의 코드 목록 조회
-   * 예: getCodesByType('RANK') -> 대리, 과장, 차장...
-   */
-  async getCodesByType(type: string) {
-    return this.prisma.commonCode.findMany({
-      where: {
-        type,
-        isUsed: true, // 사용 중인 코드만 필터링
-      },
-      select: {
-        type: true,
-        code: true,
-        name: true,
-        attr1: true,
-      },
-      orderBy: { id: 'asc' }, // 혹은 정렬용 별도 컬럼이 있다면 그것을 사용
-    });
-  }
-
-  /**
-   * 여러 타입의 코드를 한 번에 조회 (화면 초기 로딩 최적화용)
-   */
-  async getCodesByTypes(types: string[]) {
-    return this.prisma.commonCode.findMany({
-      where: {
-        type: { in: types },
-        isUsed: true,
-      },
-      select: {
-        type: true,
-        code: true,
-        name: true,
-        attr1: true,
-      },
-      orderBy: { id: 'asc' },
-    });
   }
 
   async findMembersByTeam(teamId: number) {
@@ -348,5 +206,156 @@ export class CommonService {
       parentName: m.department?.name || '',
       teamName: m.team?.name || '',
     }));
+  }
+
+  // ===========================================================================
+  // [Section 2] 공통 코드(Common Code)
+  // ===========================================================================
+
+  async getCodesByTypes(types: string[]) {
+    return this.prisma.commonCode.findMany({
+      where: {
+        type: { in: types },
+        isUsed: true,
+      },
+      select: {
+        type: true,
+        code: true,
+        name: true,
+        attr1: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  async getCodesByType(type: string) {
+    return this.prisma.commonCode.findMany({
+      where: { type },
+      orderBy: { id: 'asc' }, 
+    });
+  }
+
+  async getCodeCategories() {
+    const grouped = await this.prisma.commonCode.groupBy({
+      by: ['type'],
+      _count: { code: true },
+      orderBy: { type: 'asc' },
+    });
+
+    return grouped.map((group) => ({
+      id: group.type, 
+      categoryCode: group.type,
+      categoryName: group.type, // 매핑 테이블 부재로 type을 이름으로 사용 (프론트에서 한글 매핑)
+      description: `총 ${group._count.code}개의 코드`,
+      isActive: true,
+      createdDate: new Date().toISOString(),
+    }));
+  }
+
+  async createCode(dto: { type: string; code: string; name: string; description?: string }) {
+    // [추가됨] 방어 코드: 필수값 체크
+    if (!dto.type || !dto.code) {
+      throw new BadRequestException('유형(type)과 코드(code)는 필수입니다.');
+    }
+
+    // 중복 체크
+    const exists = await this.prisma.commonCode.findFirst({
+      where: {
+        type: dto.type,
+        code: dto.code,
+      },
+    });
+
+    if (exists) {
+      throw new ConflictException('이미 해당 타입 내에 존재하는 코드입니다.');
+    }
+
+    return this.prisma.commonCode.create({
+      data: {
+        type: dto.type,
+        code: dto.code,
+        name: dto.name,
+        attr1: dto.description, 
+        isUsed: true,
+      },
+    });
+  }
+
+  async updateCode(id: number, dto: { code: string; name: string; description?: string }) {
+    const codeItem = await this.prisma.commonCode.findUnique({ where: { id } });
+    if (!codeItem) throw new NotFoundException('코드를 찾을 수 없습니다.');
+
+    return this.prisma.commonCode.update({
+      where: { id },
+      data: {
+        code: dto.code,
+        name: dto.name,
+        attr1: dto.description,
+      },
+    });
+  }
+
+  async toggleCodeStatus(id: number) {
+    const codeItem = await this.prisma.commonCode.findUnique({ where: { id } });
+    if (!codeItem) throw new NotFoundException('코드를 찾을 수 없습니다.');
+
+    return this.prisma.commonCode.update({
+      where: { id },
+      data: { isUsed: !codeItem.isUsed },
+    });
+  }
+
+  /**
+   * [수정됨] 카테고리 생성 (첫 번째 코드 동시 등록)
+   * - Controller에서 보낸 CreateCategoryDto와 타입을 일치시켰습니다.
+   * - ID 시퀀스(번호표)를 강제로 조정하여 Unique Constraint 에러를 방지합니다.
+   */
+  async createCategory(dto: { categoryCode: string; firstCode: string; firstName: string; firstDesc?: string }) {
+    
+    // 방어 로직
+    if (!dto.categoryCode) {
+      console.log('❌ [ERROR] categoryCode가 없습니다!');
+      throw new BadRequestException('유형 코드가 전달되지 않았습니다.');
+    }
+
+    // 1. 이미 존재하는 유형인지 확인
+    console.log(`🔎 [DB 검색] type이 '${dto.categoryCode}'인 데이터 찾는 중...`);
+    
+    const exists = await this.prisma.commonCode.findFirst({
+      where: { type: dto.categoryCode },
+    });
+
+    console.log('📄 [DB 검색 결과]:', exists); 
+
+    if (exists) {
+      console.log('⚠️ [CONFLICT] 이미 존재함 판정 -> 409 에러 발생');
+      throw new ConflictException(`이미 존재하는 유형 코드입니다: ${dto.categoryCode}`);
+    }
+
+    console.log('✅ [PASS] 중복 없음. 생성 시작...');
+
+    // 🚨 [핵심 수정] DB 번호표(Sequence)가 꼬였을 때를 대비해 강제로 동기화
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        SELECT setval('common_code_id_seq', (SELECT MAX(id) FROM "common_code"));
+      `);
+      console.log('🔧 [FIX] ID 시퀀스(번호표) 동기화 완료');
+    } catch (e) {
+      // 테이블이 비어있거나 권한 문제 등은 무시 (보통은 위 쿼리로 해결됨)
+      console.log('⚠️ 시퀀스 조정 실패 (무시 가능):', e instanceof Error ? e.message : e);
+    }
+
+    // 2. 생성 시도
+    const result = await this.prisma.commonCode.create({
+      data: {
+        type: dto.categoryCode,    
+        code: dto.firstCode,       
+        name: dto.firstName,       
+        attr1: dto.firstDesc,      
+        isUsed: true,
+      },
+    });
+    
+    return result;
   }
 }

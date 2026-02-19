@@ -7,10 +7,11 @@ import { QueryEmployeeDto, CareerRange } from './dto/query-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
 import { getErrorMessage } from '@common/utils/error.util';
-// 📸 [추가] 사진 저장을 위한 유틸리티 임포트 (필수)
+// 📸 사진 저장을 위한 유틸리티 임포트
 import { saveProfileImage } from '@common/utils/file-upload.util';
 import * as bcrypt from 'bcrypt';
 
+// Prisma 타입 정의 (Relation 포함)
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   include: {
     employeeDetail: true;
@@ -55,7 +56,7 @@ export class EmployeeService {
       throw new ConflictException('이미 등록된 주민번호입니다.');
     }
 
-    // 📸 [추가] 사진 업로드 처리 로직 (Base64 -> 파일 저장 -> 경로 반환)
+    // 📸 사진 업로드 처리 로직
     let savedProfilePath = dto.profilePath; 
     if (dto.profileImageBase64) {
       const uploadedPath = saveProfileImage(dto.profileImageBase64, dto.no);
@@ -93,26 +94,21 @@ export class EmployeeService {
           },
         });
 
-        // 상세정보
+        // 상세정보 생성
         await tx.employeeDetail.create({
           data: {
             employeeId: employee.id,
             type: dto.type || 'REGULAR',
             hrStatus: dto.hrStatus || 'EMPLOYED',
             skillLevel: dto.skillLevel || '초급',
-
-            // ✅ 최종 학력 저장
             eduLevel: dto.eduLevel,
             lastSchool: dto.lastSchool,
             major: dto.major,
-            
             maritalStatus: dto.maritalStatus,
             totalSwExperience: dto.totalSwExperience || 0,
             zipCode: dto.zipCode,
             address: dto.address,
             addressDetail: dto.addressDetail,
-            
-            // 📸 [수정] 저장된 이미지 경로 사용
             profilePath: savedProfilePath,
           },
         });
@@ -129,7 +125,7 @@ export class EmployeeService {
           },
         });
 
-        // 전직장 경력 등록 (있을 경우)
+        // 전직장 경력 등록
         if (dto.previousExperiences && dto.previousExperiences.length > 0) {
           await tx.previousExperience.createMany({
             data: dto.previousExperiences.map((exp) => ({
@@ -146,7 +142,7 @@ export class EmployeeService {
           });
         }
 
-        // 자격증 및 파일 등록 (있을 경우)
+        // 자격증 등록
         if (dto.certificates && dto.certificates.length > 0) {
           for (const cert of dto.certificates) {
             const newCert = await tx.certificate.create({
@@ -161,20 +157,15 @@ export class EmployeeService {
             });
 
             if (cert.attachmentPaths && cert.attachmentPaths.length > 0) {
-              const path = cert.attachmentPaths[0]; // 무조건 첫 번째 파일만 취함
-
+              const path = cert.attachmentPaths[0]; 
               await tx.attachment.create({
                 data: {
-                  employeeId: employee.id, // 사원 PK (누구의 파일인가)
-                  uploaderId: employee.id, // 관리자 PK (누가 올렸는가)
-                  certificateId: newCert.id, // 자격증 PK (어떤 자격증의 파일인가)
-
+                  employeeId: employee.id, 
+                  uploaderId: employee.id, 
+                  certificateId: newCert.id, 
                   fileType: 'CERTIFICATE',
                   filePath: path,
-                  // 필수값 fileName 추출 (에러 해결)
                   fileName: path.split('/').pop() || 'cert_file',
-
-                  // 기존에 사용하던 ref 구조가 있다면 유지
                   refId: newCert.id,
                   refType: 'CERTIFICATE',
                 },
@@ -204,7 +195,7 @@ export class EmployeeService {
     });
   }
 
-  // 2. 인사관리 정보조회
+  // 2. 인사관리 정보조회 (수정된 핵심 로직)
   async query(filter: QueryEmployeeDto) {
     try {
       const { departmentId, teamId, searchKeyword, skillLevel, assignStatus, careerRange } = filter;
@@ -215,38 +206,79 @@ export class EmployeeService {
           assignStatus: assignStatus || undefined,
           // 사원 상세 정보(기술등급) 필터
           employeeDetail: skillLevel ? { is: { skillLevel } } : undefined,
-          // 이름 또는 사번 검색
-          OR: searchKeyword ? [{ nameKr: { contains: searchKeyword } }, { no: { contains: searchKeyword } }] : undefined,
+          // 이름, 사번, 영문명 검색
+          OR: searchKeyword ? [
+            { nameKr: { contains: searchKeyword } },
+            { no: { contains: searchKeyword } },
+            { nameEn: { contains: searchKeyword } }
+          ] : undefined,
           // 소속 조직 필터 (현재 소속 기준)
           ...(departmentId && { departmentId }),
           ...(teamId && { teamId }),
         },
         include: {
-          employeeDetail: true,
+          employeeDetail: true, 
           previousExperiences: true,
           _count: { select: { certificates: true } },
+          // ✅ 조직 정보 조인 (부서, 팀 모두 가져옴)
           department: true,
           team: true,
         },
+        orderBy: { no: 'asc' } // 사번순 정렬
       });
 
       const list = employees.map((emp) => {
-        const totalMonths = calculateTotalCareerMonths(emp.previousExperiences);
-        const totalYears = Math.floor(totalMonths / 12);
+        // 1. 경력 계산 (DB값 우선 -> 입사일 기준 -> 과거경력 합산)
+        let finalCareerYear = 0;
+        
+        if (emp.employeeDetail?.totalSwExperience) {
+           finalCareerYear = emp.employeeDetail.totalSwExperience;
+        } else if (emp.joinDate) {
+           // 입사일 기준 현재까지 연차 계산
+           const join = new Date(emp.joinDate);
+           const now = new Date();
+           const diffTime = Math.abs(now.getTime() - join.getTime());
+           const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365); 
+           finalCareerYear = parseFloat(diffYears.toFixed(1));
+        } else {
+           const calcTotalMonths = calculateTotalCareerMonths(emp.previousExperiences);
+           finalCareerYear = Math.floor(calcTotalMonths / 12);
+        }
+
+        // 2. ✅ [핵심] 조직 ID 매핑 (Team이 있으면 Team ID를 보냄)
+        // 프론트엔드가 이 ID를 기준으로 트리를 타고 올라가서 '실/본부'를 찾음
+        const targetOrgId = emp.teamId ?? emp.departmentId;
+        const targetOrgName = emp.team?.name ?? emp.department?.name ?? '미배정';
 
         return {
-          id: emp.id,
-          no: emp.no, // 사번 정보 포함
-          name: emp.nameKr,
-          // 🛠️ [수정] true 대신 실제 부서/팀 이름을 반환하도록 변경 (화면 표시용)
-          department: emp.department?.name || '미지정',
-          team: emp.team?.name || '-',
-          jobRol: emp.jobRole,
-          position: emp.jobLevel, // 직급 정보 매핑
-          assignStatus: emp.assignStatus,
-          skillLevel: emp.employeeDetail?.skillLevel || '미등록',
+          id: emp.id,          // DB PK 
+          no: emp.no,          // 사번 
+          name: emp.nameKr,    // 한글명
+          
+          // ✅ 프론트엔드 매핑용 필드 (가장 하위 조직 정보 전달)
+          departmentId: targetOrgId,   
+          department: targetOrgName,   
+          
+          // 원본 부서/팀 정보 (참조용)
+          deptId: emp.departmentId,
+          teamId: emp.teamId,
+
+          jobLevel: emp.jobLevel, // 직급
+          jobRole: emp.jobRole,   // 직책
+          assignStatus: emp.assignStatus, // 상태
+          
+          // 기술등급
+          skillLevel: emp.employeeDetail?.skillLevel || '초급',
+          
           count: emp._count?.certificates ?? 0,
-          totalCareerYear: totalYears,
+          
+          // 경력
+          totalCareerYear: finalCareerYear,
+          joinDate: emp.joinDate, // 입사일 추가
+          
+          // 연락처
+          email: emp.email,
+          phone: emp.phone,
         };
       });
 
@@ -292,7 +324,7 @@ export class EmployeeService {
   // 4. 정보 수정 (기존 유지)
   async update(id: string, dto: UpdateEmployeeDto) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. 사원 기본 정보 (반드시 존재하므로 update)
+      // 1. 사원 기본 정보
       await tx.employee.update({
         where: { id },
         data: {
@@ -310,16 +342,13 @@ export class EmployeeService {
         },
       });
 
-      // 2. 사원 상세 정보 (반드시 존재하므로 update)
+      // 2. 사원 상세 정보
       await tx.employeeDetail.update({
         where: { employeeId: id },
         data: {
           type: dto.type,
           hrStatus: dto.hrStatus,
-
-          // ✅ 최종 학력 수정
           eduLevel: dto.eduLevel,
-
           lastSchool: dto.lastSchool,
           major: dto.major,
           maritalStatus: dto.maritalStatus,
@@ -330,7 +359,7 @@ export class EmployeeService {
         },
       });
 
-      // 3. 기술 역량 (1:1 관계 - upsert 활용)
+      // 3. 기술 역량
       if (dto.technicalAbility) {
         await tx.technicalAbility.upsert({
           where: { employeeId: id },
@@ -350,7 +379,7 @@ export class EmployeeService {
         });
       }
 
-      // 4. 자격증 및 경력 (1:N 관계 - Delete-Insert 전략)
+      // 4. 자격증 (재등록 방식)
       await tx.certificate.deleteMany({ where: { employeeId: id } });
       if (dto.certificates && dto.certificates.length > 0) {
         for (const cert of dto.certificates) {
@@ -366,20 +395,15 @@ export class EmployeeService {
           });
 
           if (cert.attachmentPaths && cert.attachmentPaths.length > 0) {
-            const path = cert.attachmentPaths[0]; // 무조건 첫 번째 파일만 취함
-
+            const path = cert.attachmentPaths[0];
             await tx.attachment.create({
               data: {
                 employeeId: id,
                 uploaderId: id,
-                certificateId: newCert.id, // 자격증 PK (어떤 자격증의 파일인가)
-
+                certificateId: newCert.id,
                 fileType: 'CERTIFICATE',
                 filePath: path,
-                // 필수값 fileName 추출 (에러 해결)
                 fileName: path.split('/').pop() || 'cert_file',
-
-                // 기존에 사용하던 ref 구조가 있다면 유지
                 refId: newCert.id,
                 refType: 'CERTIFICATE',
               },
@@ -388,16 +412,14 @@ export class EmployeeService {
         }
       }
 
-      // 5. 프로젝트 투입 이력 (ProjectAssignment)
+      // 5. 프로젝트 투입 이력
       await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
       if (dto.projects && dto.projects.length > 0) {
         const projects = dto.projects;
-
         await tx.projectAssignment.createMany({
           data: projects.map((proj) => ({
             employeeId: id,
             projectId: Number(proj.projectId),
-
             startDate: proj.startDate,
             endDate: proj.endDate ?? null,
             assignedRole: proj.assignedRole ?? null,
@@ -407,16 +429,11 @@ export class EmployeeService {
           })),
         });
       }
-
-      // 6. 자산할당
-
-      // 7. 부서나 직급 변경시 조직히스토리
     });
   }
 
-  // --- 헬퍼 함수들 (경력 체크, 기간 계산, DTO 매핑) ---
+  // --- 헬퍼 함수들 ---
 
-  /** 경력 구간 체크 함수 */
   private isWithinCareerRange(years: number, range: CareerRange): boolean {
     const ranges = {
       [CareerRange.BEGINNER]: years <= 3,
@@ -438,7 +455,6 @@ export class EmployeeService {
     if (!emp) throw new Error('Data mapping failed: Employee object is null');
 
     return {
-      // 1. 기본정보 (구조에 맞게 가공)
       basicInfo: {
         id: emp.id,
         no: emp.no,
@@ -482,8 +498,6 @@ export class EmployeeService {
         previousExperiences: emp.previousExperiences?.map((exp) => `${exp.companyName ?? '미정'} / ${exp.jobRole ?? '-'} / ${this.calculatePeriod(exp.entranceDate, exp.resignationDate)}`) ?? [],
         assetsList: emp.assets?.map((assets) => `${assets.name} (${assets.typeId})`) ?? [],
       },
-
-      // 2. 역량정보
       skillsInfo: {
         certificates: emp.certificates.map((cert) => ({
           name: cert.name,
@@ -498,15 +512,12 @@ export class EmployeeService {
           testExecution: (emp.technicalAbility?.testExecution as string) ?? null,
         },
         employeeTool: {
-          // ✅ (as string) 캐스팅과 ?? null을 조합하여 타입을 확정합니다.
           defectSystem: (emp.employeeTool?.defectSystem as string) ?? null,
           messenger: (emp.employeeTool?.messenger as string) ?? null,
           apiTool: (emp.employeeTool?.apiTool as string) ?? null,
           etcTool: (emp.employeeTool?.etcTool as string) ?? null,
         },
       },
-
-      // 3. 과거경력 (Join 테이블: preProjectAssignments)
       preProject: emp.preProjectAssignments.map((ppa) => ({
         projectName: ppa.projectName,
         customerName: ppa.customerName,
@@ -520,18 +531,14 @@ export class EmployeeService {
         workDetail: (ppa.workDetail as string) ?? null,
         contribution: (ppa.contribution as string) ?? null,
       })),
-
-      // 4. 프로젝트 경력 (사내 수행 프로젝트)
       projects: emp.projectAssignments.map((pa) => ({
         projectName: pa.project?.name ?? null,
         customerName: pa.project?.customer?.name ?? null,
         startDate: pa.startDate,
         endDate: pa.endDate,
         headcount: pa.project?.headcount ?? 0,
-
         taskName: pa.project?.taskName ?? null,
         taskSummary: pa.project?.taskSummary ?? null,
-
         assignedRole: (pa.assignedRole as string) ?? null,
         tools: (pa.tools as string) ?? null,
         workDetail: (pa.workDetail as string) ?? null,
