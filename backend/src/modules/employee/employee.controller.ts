@@ -39,8 +39,7 @@ export class EmployeeController {
   @ApiResponse({ status: 400, description: '잘못된 요청 (파라미터 오류 등)' })
   @ApiResponse({ status: 500, description: '서버 내부 오류 (DB 연결 실패 등)' })
   async query(@Query() dto: QueryEmployeeDto) {
-    console.log("🔥 [Controller] 목록 조회 요청 받음");
-    
+  
     // 1. 서비스 호출
     const result = await this.employeeService.query(dto);
 

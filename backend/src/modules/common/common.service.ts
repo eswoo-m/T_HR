@@ -305,11 +305,7 @@ export class CommonService {
     });
   }
 
-  /**
-   * [수정됨] 카테고리 생성 (첫 번째 코드 동시 등록)
-   * - Controller에서 보낸 CreateCategoryDto와 타입을 일치시켰습니다.
-   * - ID 시퀀스(번호표)를 강제로 조정하여 Unique Constraint 에러를 방지합니다.
-   */
+
   async createCategory(dto: { categoryCode: string; firstCode: string; firstName: string; firstDesc?: string }) {
     
     // 방어 로직

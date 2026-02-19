@@ -41,11 +41,6 @@ export class UpdateEmployeeDto {
   @IsString()
   @IsOptional()
   nameCh?: string;
-  //
-  // @ApiProperty({ description: '로그인 비밀번호', example: 'password123!' })
-  // @IsString()
-  // @IsNotEmpty()
-  // password: string;
 
   @ApiProperty({ description: '전화번호', example: '010-1234-5678', required: false })
   @IsString()
@@ -166,4 +161,25 @@ export class UpdateEmployeeDto {
   @ValidateNested({ each: true })
   @Type(() => ProjectAssignmentDto)
   projects?: ProjectAssignmentDto[];
+
+  // 👇 [추가된 부분] 프론트엔드에서 넘어오는 새로운 도구/기술 데이터 허용
+  @ApiPropertyOptional({ description: '기술 스택 및 결함관리 도구', example: 'JAVA,REACT' })
+  @IsString()
+  @IsOptional()
+  techStack?: string;
+
+  @ApiPropertyOptional({ description: '소통수단', example: 'Slack, Teams' })
+  @IsString()
+  @IsOptional()
+  communicationTool?: string;
+
+  @ApiPropertyOptional({ description: 'API 도구', example: 'Postman, Swagger' })
+  @IsString()
+  @IsOptional()
+  apiTool?: string;
+
+  @ApiPropertyOptional({ description: '기타 도구', example: 'Figma, Notion' })
+  @IsString()
+  @IsOptional()
+  otherTool?: string;
 }

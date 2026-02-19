@@ -220,9 +220,10 @@ export class EmployeeService {
           employeeDetail: true, 
           previousExperiences: true,
           _count: { select: { certificates: true } },
-          // ✅ 조직 정보 조인 (부서, 팀 모두 가져옴)
           department: true,
           team: true,
+          // ✅ [추가] 프론트엔드로 도구/기술 스택 데이터를 보내기 위해 포함
+          employeeTool: true, 
         },
         orderBy: { no: 'asc' } // 사번순 정렬
       });
@@ -245,40 +246,37 @@ export class EmployeeService {
            finalCareerYear = Math.floor(calcTotalMonths / 12);
         }
 
-        // 2. ✅ [핵심] 조직 ID 매핑 (Team이 있으면 Team ID를 보냄)
-        // 프론트엔드가 이 ID를 기준으로 트리를 타고 올라가서 '실/본부'를 찾음
+        // 2. 조직 ID 매핑
         const targetOrgId = emp.teamId ?? emp.departmentId;
         const targetOrgName = emp.team?.name ?? emp.department?.name ?? '미배정';
 
         return {
-          id: emp.id,          // DB PK 
-          no: emp.no,          // 사번 
-          name: emp.nameKr,    // 한글명
+          id: emp.id,          
+          no: emp.no,          
+          name: emp.nameKr,    
           
-          // ✅ 프론트엔드 매핑용 필드 (가장 하위 조직 정보 전달)
           departmentId: targetOrgId,   
           department: targetOrgName,   
           
-          // 원본 부서/팀 정보 (참조용)
           deptId: emp.departmentId,
           teamId: emp.teamId,
 
-          jobLevel: emp.jobLevel, // 직급
-          jobRole: emp.jobRole,   // 직책
-          assignStatus: emp.assignStatus, // 상태
+          jobLevel: emp.jobLevel, 
+          jobRole: emp.jobRole,   
+          assignStatus: emp.assignStatus, 
           
-          // 기술등급
           skillLevel: emp.employeeDetail?.skillLevel || '초급',
           
           count: emp._count?.certificates ?? 0,
           
-          // 경력
           totalCareerYear: finalCareerYear,
-          joinDate: emp.joinDate, // 입사일 추가
+          joinDate: emp.joinDate, 
           
-          // 연락처
           email: emp.email,
           phone: emp.phone,
+
+          // ✅ [추가] EmployeeTool 데이터를 리스트 응답에 포함 (프론트 매핑용)
+          employeeTool: emp.employeeTool || null,
         };
       });
 
@@ -321,24 +319,37 @@ export class EmployeeService {
     return this.mapToDetailDto(employee as EmployeeWithRelations);
   }
 
-  // 4. 정보 수정 (기존 유지)
-  async update(id: string, dto: UpdateEmployeeDto) {
+  // 4. 정보 수정 (🌟 EmployeeTool upsert 로직 추가)
+  async update(id: string, dto: UpdateEmployeeDto | any) {
+    console.log('🔥 [백엔드] update 서비스 시작!');
+    console.log('🔥 [백엔드] 프론트에서 받은 전체 데이터:', dto);
+    console.log('🔥 [백엔드] techStack 값:', dto.techStack);
     return this.prisma.$transaction(async (tx) => {
+      // 프론트엔드에서 EmployeeTool 데이터를 techStack 등의 이름으로 직접 보낼 수 있으므로 분리 (any 타입으로 유연성 허용)
+      const {
+        techStack, // 결함 관리 도구 (기술 스택)
+        communicationTool,
+        apiTool,
+        otherTool,
+        technicalAbility,
+        ...basicDto
+      } = dto;
+
       // 1. 사원 기본 정보
       await tx.employee.update({
         where: { id },
         data: {
-          nameEn: dto.nameEn,
-          nameCh: dto.nameCh,
-          departmentId: dto.departmentId,
-          teamId: dto.teamId,
-          deptId: dto.deptId,
-          jobLevel: dto.jobLevel,
-          jobRole: dto.jobRole,
-          assignStatus: dto.assignStatus,
-          authLevel: dto.authLevel,
-          email: dto.email,
-          phone: dto.phone,
+          nameEn: basicDto.nameEn,
+          nameCh: basicDto.nameCh,
+          departmentId: basicDto.departmentId,
+          teamId: basicDto.teamId,
+          deptId: basicDto.deptId,
+          jobLevel: basicDto.jobLevel,
+          jobRole: basicDto.jobRole,
+          assignStatus: basicDto.assignStatus,
+          authLevel: basicDto.authLevel,
+          email: basicDto.email,
+          phone: basicDto.phone,
         },
       });
 
@@ -346,43 +357,64 @@ export class EmployeeService {
       await tx.employeeDetail.update({
         where: { employeeId: id },
         data: {
-          type: dto.type,
-          hrStatus: dto.hrStatus,
-          eduLevel: dto.eduLevel,
-          lastSchool: dto.lastSchool,
-          major: dto.major,
-          maritalStatus: dto.maritalStatus,
-          zipCode: dto.zipCode,
-          address: dto.address,
-          addressDetail: dto.addressDetail,
-          profilePath: dto.profilePath,
+          type: basicDto.type,
+          hrStatus: basicDto.hrStatus,
+          eduLevel: basicDto.eduLevel,
+          lastSchool: basicDto.lastSchool,
+          major: basicDto.major,
+          maritalStatus: basicDto.maritalStatus,
+          zipCode: basicDto.zipCode,
+          address: basicDto.address,
+          addressDetail: basicDto.addressDetail,
+          profilePath: basicDto.profilePath,
         },
       });
 
-      // 3. 기술 역량
-      if (dto.technicalAbility) {
+      // 3. ✅ [수정] 기술 역량 (TechnicalAbility) - 기존 로직 유지
+      if (technicalAbility) {
         await tx.technicalAbility.upsert({
           where: { employeeId: id },
           update: {
-            communicationSkill: dto.technicalAbility.communication,
-            officeSkill: dto.technicalAbility.officeSkill,
-            testDesign: dto.technicalAbility.testDesign,
-            testExecution: dto.technicalAbility.testExecution,
+            communicationSkill: technicalAbility.communication,
+            officeSkill: technicalAbility.officeSkill,
+            testDesign: technicalAbility.testDesign,
+            testExecution: technicalAbility.testExecution,
           },
           create: {
             employeeId: id,
-            communicationSkill: dto.technicalAbility.communication,
-            officeSkill: dto.technicalAbility.officeSkill,
-            testDesign: dto.technicalAbility.testDesign,
-            testExecution: dto.technicalAbility.testExecution,
+            communicationSkill: technicalAbility.communication,
+            officeSkill: technicalAbility.officeSkill,
+            testDesign: technicalAbility.testDesign,
+            testExecution: technicalAbility.testExecution,
+          },
+        });
+      }
+
+      // 3-1. ✅ [추가] 사용 가능 도구 및 기술 스택 (EmployeeTool) 업데이트
+      // 프론트엔드에서 techStack(결함도구), communicationTool(메신저) 등을 보냈을 경우
+      if (techStack !== undefined || communicationTool !== undefined || apiTool !== undefined || otherTool !== undefined) {
+        await tx.employeeTool.upsert({
+          where: { employeeId: id },
+          update: {
+            defectSystem: techStack !== undefined ? techStack : undefined,
+            messenger: communicationTool !== undefined ? communicationTool : undefined,
+            apiTool: apiTool !== undefined ? apiTool : undefined,
+            etcTool: otherTool !== undefined ? otherTool : undefined,
+          },
+          create: {
+            employeeId: id,
+            defectSystem: techStack || '',
+            messenger: communicationTool || '',
+            apiTool: apiTool || '',
+            etcTool: otherTool || '',
           },
         });
       }
 
       // 4. 자격증 (재등록 방식)
       await tx.certificate.deleteMany({ where: { employeeId: id } });
-      if (dto.certificates && dto.certificates.length > 0) {
-        for (const cert of dto.certificates) {
+      if (basicDto.certificates && basicDto.certificates.length > 0) {
+        for (const cert of basicDto.certificates) {
           const newCert = await tx.certificate.create({
             data: {
               employeeId: id,
@@ -414,10 +446,10 @@ export class EmployeeService {
 
       // 5. 프로젝트 투입 이력
       await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
-      if (dto.projects && dto.projects.length > 0) {
-        const projects = dto.projects;
+      if (basicDto.projects && basicDto.projects.length > 0) {
+        const projects = basicDto.projects;
         await tx.projectAssignment.createMany({
-          data: projects.map((proj) => ({
+          data: projects.map((proj: any) => ({
             employeeId: id,
             projectId: Number(proj.projectId),
             startDate: proj.startDate,
