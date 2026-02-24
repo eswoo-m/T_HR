@@ -35,21 +35,17 @@ model Organization {
   desc      String?
   regTime   DateTime  @default(now()) @map("reg_time")
 
-  // ✅ 서비스 코드 호환용 별칭 (projects, employee)
   projects Project[]  @relation("OrganizationToProject")
   employee Employee[] @relation("EmployeeToOrganization")
 
-  // 조직도 구조 (Self-relation)
   parent   Organization?  @relation("OrganizationToParent", fields: [parentId], references: [id])
   children Organization[] @relation("OrganizationToParent")
 
-  // 기타 관계 및 히스토리
   employeesAsOrganization Employee[]                    @relation("EmployeeDepartment")
   employeesAsTeam         Employee[]                    @relation("EmployeeTeam")
   historiesAsOrganization EmployeeOrganizationHistory[] @relation("DepartmentRelation")
   historiesAsTeam         EmployeeOrganizationHistory[] @relation("TeamRelation")
 
-  // DB Pull 시 생성되었던 기존 관계들 (에러 방지용)
   project_dept_rel Project[] @relation("project_department_idToorganization")
 
   @@index([parentId])
@@ -224,6 +220,7 @@ model EmployeeOrganizationHistory {
   jobRole      String?       @map("job_role")
   applyDate    DateTime      @map("apply_date") @db.Date
   regTime      DateTime      @default(now()) @map("reg_time")
+  memo         String?       @map("memo")
   department   Organization  @relation("DepartmentRelation", fields: [departmentId], references: [id])
   employee     Employee      @relation(fields: [employeeId], references: [id])
   team         Organization? @relation("TeamRelation", fields: [teamId], references: [id])
@@ -381,6 +378,7 @@ model CommonCode {
   code           String           @map("code")
   name           String           @map("name")
   attr1          String?          @map("attr1")
+  order          Int?             @map("order")
   isUsed         Boolean          @default(true) @map("is_used")
   regTime        DateTime         @default(now()) @map("reg_time")
   EmployeeDetail EmployeeDetail[]

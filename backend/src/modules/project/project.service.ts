@@ -171,6 +171,7 @@ export class ProjectService {
         customer: { select: { name: true } },
         team: {
           select: {
+            id: true,
             name: true,
             parent: { select: { name: true } },
           },
@@ -191,11 +192,12 @@ export class ProjectService {
       projectName: p.name,
       customerName: p.customer?.name ?? '-',
       departmentName: p.team?.parent?.name ?? p.team?.name ?? '-',
+      teamId: p.teamId ? p.teamId : null,
       teamName: p.team?.parent ? p.team.name : '-',
       status: p.status,
-      startDate: p.startDate ? new Date(p.startDate) : null,
-      endDate: p.endDate ? new Date(p.endDate) : null,
-      period: `${p.startDate?.toISOString().split('T')[0] ?? ''} ~ ${p.endDate?.toISOString().split('T')[0] ?? '진행중'}`,
+      startDate: p.startDate ? formatDate(p.startDate) : null,
+      endDate: p.endDate ? formatDate(p.endDate) : null,
+      // period: formatDate(p.startDate) ~ formatDate(p.endDate),
       amount: p.amount,
       headcount: p.headcount,
       memberNames: p.projectAssignment.map((pa) => pa.employee.nameKr).join(', '),

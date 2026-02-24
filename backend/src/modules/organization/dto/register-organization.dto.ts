@@ -15,10 +15,10 @@ export class RegisterOrganizationDto {
   @ApiProperty({ example: 1, description: '상위 조직 ID', required: false })
   @IsOptional()
   @IsNumber()
-  parentId?: number;
+  parentId?: number | null;
 
   @ApiProperty({ example: '신규 프로젝트를 위한 개발팀', description: '상세 설명', required: false })
   @IsOptional()
   @IsString()
-  desc?: string;
+  description?: string;
 }

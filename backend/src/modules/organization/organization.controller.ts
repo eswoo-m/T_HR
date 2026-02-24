@@ -1,11 +1,15 @@
-import { Controller, Get, Post, Param, Body, Patch, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Patch, Put, ParseIntPipe } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { OrganizationService } from './organization.service';
 import { OrganizationDetailResponseDto } from '@modules/organization/dto/organization-detail-response.dto';
 import { RegisterOrganizationDto } from '@modules/organization/dto/register-organization.dto';
 import { UpdateOrganizationDto } from '@modules/organization/dto/update-organization.dto';
-import { OrganizationChangeDto } from '@modules/organization/dto/delete-organization.dto';
+import { UpdateOrganizationScheduledDto } from '@modules/organization/dto/update-organization-scheduled.dto';
+// import { OrganizationChangeDto } from '@modules/organization/dto/delete-organization.dto';
+// import { GetOrganizationHistoryDto } from '@modules/organization/dto/get-organization-history.dto';
+import { MoveMembersDto } from '@modules/dto/move-members.dto';
 import { GetOrganizationHistoryDto } from '@modules/organization/dto/get-organization-history.dto';
+
 @ApiTags('조직 관리')
 @Controller('organizations')
 export class OrganizationController {
@@ -49,13 +53,29 @@ export class OrganizationController {
   @ApiResponse({ status: 400, description: '날짜 형식이 잘못되었거나 필수 파라미터가 누락되었습니다.' })
   @ApiResponse({ status: 404, description: '해당 ID를 가진 부서를 찾을 수 없습니다.' })
   @ApiResponse({ status: 500, description: '서버 내부 처리 중 오류가 발생했습니다.' })
-  async changeOrganization(@Param('id', ParseIntPipe) id: number, @Body() dto: OrganizationChangeDto) {
+  async changeOrganization(@Param('id', ParseIntPipe) id: number, @Body() dto: RegisterOrganizationDto) {
     return await this.orgService.handleOrganizationChange(id, dto);
   }
 
   @Get('history')
   @ApiOperation({ summary: '조직 변경 이력 조회' })
-  async getHistory(@Query() dto: GetOrganizationHistoryDto) {
-    return await this.orgService.getOrganizationHistory(dto);
+  async getHistory() {
+    // 💡 서비스에서 DTO 없이 전체 데이터를 분류해서 가져옵니다. 🛡️
+    return await this.orgService.getOrganizationHistory();
+  }
+
+  @Patch('members/move')
+  async moveMembers(@Body() moveMembersDto: MoveMembersDto) {
+    return await this.orgService.updateMembersDepartment(moveMembersDto.memberIds, moveMembersDto.targetDeptId);
+  }
+
+  @Patch(':id/terminate')
+  async terminateOrganization(@Param('id', ParseIntPipe) id: number, @Body() data: { exitDate: string }) {
+    return await this.orgService.terminate(id, data.exitDate);
+  }
+
+  @Put('scheduled/:id')
+  async updateScheduledChange(@Param('id') id: number, @Body() updateDto: UpdateOrganizationScheduledDto) {
+    return await this.orgService.updateScheduledChange(id, updateDto);
   }
 }

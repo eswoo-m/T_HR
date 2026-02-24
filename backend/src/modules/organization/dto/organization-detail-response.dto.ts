@@ -16,6 +16,9 @@ export class OrganizationDetailResponseDto {
     period: string; // "2024.01 ~ 2026.12"
   } | null;
 
+  @ApiProperty({ example: '팀설명입니다.', description: '팀설명' })
+  description: string;
+
   @ApiProperty({ description: '하위 조직 목록' })
   subOrganizations: {
     id: number;

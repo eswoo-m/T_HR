@@ -10,5 +10,5 @@ export class UpdateOrganizationDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  desc?: string;
+  description?: string;
 }
