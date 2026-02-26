@@ -1,34 +1,24 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum } from 'class-validator';
-
-export enum OrgChangeType {
-  ALL = 'ALL',
-  NEW = 'NEW', // 신설
-  CLOSE = 'CLOSE', // 폐지
-}
+import { IsOptional, IsString, IsDateString } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GetOrganizationHistoryDto {
-  @ApiProperty({ description: '탭 구분 (past: 과거이력, scheduled: 예정사항)', enum: ['past', 'scheduled'] })
-  @IsEnum(['past', 'scheduled'])
-  tab: 'past' | 'scheduled';
-
-  @ApiPropertyOptional({ description: '부서명/팀명 검색' })
+  @ApiPropertyOptional({ description: '시작 날짜 (YYYY-MM-DD)' })
   @IsOptional()
-  @IsString()
-  searchKeyword?: string;
-
-  @ApiPropertyOptional({ description: '검색 시작일 (YYYY-MM-DD)' })
-  @IsOptional()
-  @IsString()
+  @IsDateString()
   startDate?: string;
 
-  @ApiPropertyOptional({ description: '검색 종료일 (YYYY-MM-DD)' })
+  @ApiPropertyOptional({ description: '종료 날짜 (YYYY-MM-DD)' })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   endDate?: string;
 
-  @ApiPropertyOptional({ enum: OrgChangeType, default: OrgChangeType.ALL })
+  @ApiPropertyOptional({ description: '조직명 또는 부서명 검색어' })
   @IsOptional()
-  @IsEnum(OrgChangeType)
-  type?: OrgChangeType = OrgChangeType.ALL;
+  @IsString()
+  searchQuery?: string;
+
+  @ApiPropertyOptional({ description: '변경 유형 (신설, 폐지 등)' })
+  @IsOptional()
+  @IsString()
+  type?: string;
 }

@@ -39,7 +39,9 @@ type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
 export class EmployeeService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // =======================================================================
   // 1. 계정생성 (신규 사원 등록)
+  // =======================================================================
   async register(dto: RegisterEmployeeDto, adminId: string) {
     const TODAY = getKstDate();
 
@@ -195,47 +197,42 @@ export class EmployeeService {
     });
   }
 
-  // 2. 인사관리 정보조회 (수정된 핵심 로직)
+  // =======================================================================
+  // 2. 인사관리 정보조회
+  // =======================================================================
   async query(filter: QueryEmployeeDto) {
     try {
       const { departmentId, teamId, searchKeyword, skillLevel, assignStatus, careerRange } = filter;
 
-      // 1. Prisma 조회 쿼리 구성
       const employees = await this.prisma.employee.findMany({
         where: {
           assignStatus: assignStatus || undefined,
-          // 사원 상세 정보(기술등급) 필터
           employeeDetail: skillLevel ? { is: { skillLevel } } : undefined,
-          // 이름, 사번, 영문명 검색
           OR: searchKeyword ? [
             { nameKr: { contains: searchKeyword } },
             { no: { contains: searchKeyword } },
             { nameEn: { contains: searchKeyword } }
           ] : undefined,
-          // 소속 조직 필터 (현재 소속 기준)
           ...(departmentId && { departmentId }),
           ...(teamId && { teamId }),
         },
         include: {
           employeeDetail: true, 
           previousExperiences: true,
-          _count: { select: { certificates: true } },
+          certificates: true, // 🌟 핵심 수정: 기존 _count 대신 실제 자격증 객체 배열을 가져옵니다.
           department: true,
           team: true,
-          // ✅ [추가] 프론트엔드로 도구/기술 스택 데이터를 보내기 위해 포함
           employeeTool: true, 
         },
-        orderBy: { no: 'asc' } // 사번순 정렬
+        orderBy: { no: 'asc' } 
       });
 
       const list = employees.map((emp) => {
-        // 1. 경력 계산 (DB값 우선 -> 입사일 기준 -> 과거경력 합산)
         let finalCareerYear = 0;
         
         if (emp.employeeDetail?.totalSwExperience) {
            finalCareerYear = emp.employeeDetail.totalSwExperience;
         } else if (emp.joinDate) {
-           // 입사일 기준 현재까지 연차 계산
            const join = new Date(emp.joinDate);
            const now = new Date();
            const diffTime = Math.abs(now.getTime() - join.getTime());
@@ -246,7 +243,6 @@ export class EmployeeService {
            finalCareerYear = Math.floor(calcTotalMonths / 12);
         }
 
-        // 2. 조직 ID 매핑
         const targetOrgId = emp.teamId ?? emp.departmentId;
         const targetOrgName = emp.team?.name ?? emp.department?.name ?? '미배정';
 
@@ -254,33 +250,24 @@ export class EmployeeService {
           id: emp.id,          
           no: emp.no,          
           name: emp.nameKr,    
-          
           departmentId: targetOrgId,   
           department: targetOrgName,   
-          
           deptId: emp.departmentId,
           teamId: emp.teamId,
-
           jobLevel: emp.jobLevel, 
           jobRole: emp.jobRole,   
           assignStatus: emp.assignStatus, 
-          
           skillLevel: emp.employeeDetail?.skillLevel || '초급',
-          
-          count: emp._count?.certificates ?? 0,
-          
+          certificates: emp.certificates || [], // 🌟 반환 객체에 자격증 데이터 추가
+          count: emp.certificates?.length ?? 0, // 🌟 개수는 배열 길이로 대체
           totalCareerYear: finalCareerYear,
           joinDate: emp.joinDate, 
-          
           email: emp.email,
           phone: emp.phone,
-
-          // ✅ [추가] EmployeeTool 데이터를 리스트 응답에 포함 (프론트 매핑용)
-          employeeTool: emp.employeeTool || null,
+          employeeTool: emp.employeeTool || null, 
         };
       });
 
-      // 3. 경력 범위 필터링 (In-memory 필터링)
       if (!careerRange) return list;
       return list.filter((emp) => this.isWithinCareerRange(emp.totalCareerYear, careerRange));
     } catch (error) {
@@ -288,7 +275,9 @@ export class EmployeeService {
     }
   }
 
-  // 3. 사원 상세 조회 (기존 유지)
+  // =======================================================================
+  // 3. 사원 상세 조회
+  // =======================================================================
   async get(id: string): Promise<EmployeeDetailResponseDto> {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
@@ -319,15 +308,13 @@ export class EmployeeService {
     return this.mapToDetailDto(employee as EmployeeWithRelations);
   }
 
-  // 4. 정보 수정 (🌟 EmployeeTool upsert 로직 추가)
+  // =======================================================================
+  // 4. 정보 수정 (Update)
+  // =======================================================================
   async update(id: string, dto: UpdateEmployeeDto | any) {
-    console.log('🔥 [백엔드] update 서비스 시작!');
-    console.log('🔥 [백엔드] 프론트에서 받은 전체 데이터:', dto);
-    console.log('🔥 [백엔드] techStack 값:', dto.techStack);
     return this.prisma.$transaction(async (tx) => {
-      // 프론트엔드에서 EmployeeTool 데이터를 techStack 등의 이름으로 직접 보낼 수 있으므로 분리 (any 타입으로 유연성 허용)
       const {
-        techStack, // 결함 관리 도구 (기술 스택)
+        techStack, 
         communicationTool,
         apiTool,
         otherTool,
@@ -335,7 +322,7 @@ export class EmployeeService {
         ...basicDto
       } = dto;
 
-      // 1. 사원 기본 정보
+      // 4-1. 사원 기본 정보 수정
       await tx.employee.update({
         where: { id },
         data: {
@@ -353,7 +340,7 @@ export class EmployeeService {
         },
       });
 
-      // 2. 사원 상세 정보
+      // 4-2. 사원 상세 정보 수정
       await tx.employeeDetail.update({
         where: { employeeId: id },
         data: {
@@ -370,7 +357,7 @@ export class EmployeeService {
         },
       });
 
-      // 3. ✅ [수정] 기술 역량 (TechnicalAbility) - 기존 로직 유지
+      // 4-3. 기술 역량 (TechnicalAbility)
       if (technicalAbility) {
         await tx.technicalAbility.upsert({
           where: { employeeId: id },
@@ -390,8 +377,7 @@ export class EmployeeService {
         });
       }
 
-      // 3-1. ✅ [추가] 사용 가능 도구 및 기술 스택 (EmployeeTool) 업데이트
-      // 프론트엔드에서 techStack(결함도구), communicationTool(메신저) 등을 보냈을 경우
+      // 4-4. 사용 가능 도구 및 기술 스택 (EmployeeTool) 업데이트
       if (techStack !== undefined || communicationTool !== undefined || apiTool !== undefined || otherTool !== undefined) {
         await tx.employeeTool.upsert({
           where: { employeeId: id },
@@ -411,40 +397,47 @@ export class EmployeeService {
         });
       }
 
-      // 4. 자격증 (재등록 방식)
-      await tx.certificate.deleteMany({ where: { employeeId: id } });
-      if (basicDto.certificates && basicDto.certificates.length > 0) {
-        for (const cert of basicDto.certificates) {
-          const newCert = await tx.certificate.create({
-            data: {
-              employeeId: id,
-              type: cert.type,
-              name: cert.name,
-              issuingAuthority: cert.issuingAuthority,
-              acquisitionDate: new Date(cert.acquisitionDate),
-              expDate: cert.expDate ? new Date(cert.expDate) : null,
-            },
-          });
+      // 4-5. 자격증 동기화
+      if (basicDto.certificates) {
+        const validCertIds = basicDto.certificates
+          .map((c: any) => c.id)
+          .filter((id: any) => typeof id === 'number');
 
-          if (cert.attachmentPaths && cert.attachmentPaths.length > 0) {
-            const path = cert.attachmentPaths[0];
-            await tx.attachment.create({
+        await tx.certificate.deleteMany({
+          where: {
+            employeeId: id,
+            id: { notIn: validCertIds },
+          },
+        });
+
+        for (const cert of basicDto.certificates) {
+          if (cert.id && typeof cert.id === 'number') {
+            await tx.certificate.update({
+              where: { id: cert.id },
+              data: {
+                type: cert.type,
+                name: cert.name,
+                issuingAuthority: cert.issuingAuthority,
+                acquisitionDate: new Date(cert.acquisitionDate),
+                expDate: cert.expDate ? new Date(cert.expDate) : null,
+              },
+            });
+          } else {
+            await tx.certificate.create({
               data: {
                 employeeId: id,
-                uploaderId: id,
-                certificateId: newCert.id,
-                fileType: 'CERTIFICATE',
-                filePath: path,
-                fileName: path.split('/').pop() || 'cert_file',
-                refId: newCert.id,
-                refType: 'CERTIFICATE',
+                type: cert.type,
+                name: cert.name,
+                issuingAuthority: cert.issuingAuthority,
+                acquisitionDate: new Date(cert.acquisitionDate),
+                expDate: cert.expDate ? new Date(cert.expDate) : null,
               },
             });
           }
         }
       }
 
-      // 5. 프로젝트 투입 이력
+      // 4-6. 프로젝트 투입 이력
       await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
       if (basicDto.projects && basicDto.projects.length > 0) {
         const projects = basicDto.projects;
@@ -483,7 +476,7 @@ export class EmployeeService {
     return `${startYear} ~ ${endYear}`;
   }
 
-  private mapToDetailDto(emp: EmployeeWithRelations): EmployeeDetailResponseDto {
+  private mapToDetailDto(emp: EmployeeWithRelations): EmployeeDetailResponseDto | any {
     if (!emp) throw new Error('Data mapping failed: Employee object is null');
 
     return {
@@ -527,11 +520,24 @@ export class EmployeeService {
         experienceDisplay: `${Math.floor((emp.employeeDetail?.totalSwExperience || 0) / 12)}년`,
         remarks: emp.employeeDetail?.remarks || null,
         profileImage: emp.employeeDetail?.profilePath ?? null,
-        previousExperiences: emp.previousExperiences?.map((exp) => `${exp.companyName ?? '미정'} / ${exp.jobRole ?? '-'} / ${this.calculatePeriod(exp.entranceDate, exp.resignationDate)}`) ?? [],
+        
+        previousExperiences: emp.previousExperiences?.map((exp) => ({
+          id: exp.id,
+          companyName: exp.companyName,
+          department: exp.department,
+          jobLevel: exp.jobLevel,
+          jobRole: exp.jobRole,
+          entranceDate: exp.entranceDate,
+          resignationDate: exp.resignationDate,
+          assignedTask: exp.assignedTask,
+          relevance: exp.relevance,
+        })) ?? [],
+        
         assetsList: emp.assets?.map((assets) => `${assets.name} (${assets.typeId})`) ?? [],
       },
       skillsInfo: {
         certificates: emp.certificates.map((cert) => ({
+          id: cert.id, 
           name: cert.name,
           type: cert.type,
           acquisitionDate: cert.acquisitionDate,

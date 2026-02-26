@@ -12,12 +12,24 @@ export class TechnicalAbilityDto {
 }
 
 export class CertificateDto {
+  @IsOptional() id?: number; 
+  
   @IsString() name: string;
+  
   @IsString() type: string;
-  @IsDateString() acquisitionDate: Date;
-  @IsDateString() @IsOptional() expDate: Date;
+
+  // ✅ 변경된 부분: Type 변환기 추가 및 IsDate로 변경
+  @Type(() => Date)
+  @IsDate()
+  acquisitionDate: Date;
+
+  // ✅ 변경된 부분
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  expDate?: Date;
+
   @IsString() issuingAuthority: string;
-  @IsArray() @IsOptional() attachmentPaths?: string;
 }
 
 export class ProjectAssignmentDto {

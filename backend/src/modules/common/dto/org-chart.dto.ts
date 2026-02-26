@@ -1,7 +1,8 @@
 export class OrgMemberDto {
   id: string;
-  nameKr: string;
+  name: string;
   jobRole: string;
+  department?: string;
 }
 
 export class OrgChartDto {
@@ -13,4 +14,8 @@ export class OrgChartDto {
   parentId?: number | null;
   children?: OrgChartDto[];
   members?: OrgMemberDto[];
+  activeProject?: {
+    name: string;
+    period: string;
+  } | null;
 }
