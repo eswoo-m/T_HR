@@ -348,6 +348,16 @@ export class CommonService {
       throw new ConflictException('이미 해당 타입 내에 존재하는 코드입니다.');
     }
 
+    // 🌟 [핵심 추가] DB 번호표(Sequence) 꼬임 방지를 위한 시퀀스 강제 동기화
+    try {
+      await this.prisma.$executeRawUnsafe(`
+        SELECT setval('common_code_id_seq', COALESCE((SELECT MAX(id) FROM "common_code"), 1));
+      `);
+    } catch (e) {
+      console.log('⚠️ 시퀀스 조정 실패 (무시 가능):', e instanceof Error ? e.message : e);
+    }
+
+    // 실제 데이터 생성
     return this.prisma.commonCode.create({
       data: {
         type: dto.type,
