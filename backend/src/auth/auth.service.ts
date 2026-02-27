@@ -11,45 +11,78 @@ export class AuthService {
   ) {}
 
   async login(loginId: string, pass: string) {
-    // 1. 사번(id)으로 사용자 조회
+    // ... 기존 login 로직 (생략하지 않고 그대로 두시면 됩니다)
     const user = await this.prisma.employee.findUnique({
       where: { id: loginId },
     });
 
-    // 2. 사번이 존재하지 않는 경우 차단
     if (!user) {
       throw new UnauthorizedException('사번 또는 비밀번호가 일치하지 않습니다.');
     }
 
-    // 3. 비밀번호 검증 (bcrypt 암호화 비교)
     const isMatch = await bcrypt.compare(pass, user.password);
     
-    // 비밀번호가 틀린 경우 차단 (보안상 사번이 틀린지, 비번이 틀린지 모르게 동일한 메시지 출력)
     if (!isMatch) {
       throw new UnauthorizedException('사번 또는 비밀번호가 일치하지 않습니다.');
     }
 
-    // 4. 퇴사 여부 체크 (퇴사자는 로그인 불가)
     if (user.exitDate !== null) {
       throw new UnauthorizedException('퇴사한 사원은 로그인할 수 없습니다.');
     }
 
-    // 5. JWT 토큰 페이로드 구성
-    const payload = {
-      id: user.id,
-      no: user.no,
-      role: user.authLevel,
-    };
+    const payload = { id: user.id, no: user.no, role: user.authLevel };
 
-    // 6. 1시간짜리 토큰 및 유저 정보 반환
     return {
       access_token: this.jwtService.sign(payload),
       user: {
         id: user.id,
         name: user.nameKr,
-        role: user.jobLevel,
+        role: user.jobPosition, 
         authLevel: user.authLevel,
       },
     };
   }
+
+  // ✨ [여기에 추가하세요] 테스트용 어드민 생성 로직
+  // auth.service.ts
+
+async seedAdmin() {
+  const adminId = 'admin';
+  
+  // 1. 이미 존재하는지 확인
+  const existing = await this.prisma.employee.findUnique({
+    where: { id: adminId },
+  });
+
+  // 🌟 기존에 평문으로 잘못 저장된 데이터가 있다면 삭제 후 재생성하기 위해 처리
+  if (existing) {
+    // 만약 비밀번호가 $로 시작하지 않으면(암호화가 안 되어 있으면) 삭제
+    if (!existing.password.startsWith('$')) {
+      await this.prisma.employee.delete({ where: { id: adminId } });
+    } else {
+      return { message: '이미 암호화된 관리자 계정이 존재합니다.', status: 'existing' };
+    }
+  }
+
+  // 2. '1234qwer!@#$' 비밀번호를 암호화
+  const hashedPassword = await bcrypt.hash('1234qwer!@#$', 10);
+  
+  // 3. 암호화된 비번으로 관리자 생성
+  await this.prisma.employee.create({
+    data: {
+      id: adminId,
+      no: '10001',
+      password: hashedPassword, // ✅ 이제 DB에는 암호화된 값이 들어갑니다.
+      nameKr: '테스트관리자',
+      residentNo: '000000-0000000',
+      birthDate: new Date('1990-01-01'),
+      gender: 'MALE',
+      authLevel: 'ADMIN',
+      joinDate: new Date(),
+      jobPosition: '관리자',
+    },
+  });
+
+  return { message: '관리자 계정이 암호화되어 생성되었습니다.', status: 'created' };
+}
 }

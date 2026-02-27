@@ -7,7 +7,6 @@ import { QueryEmployeeDto, CareerRange } from './dto/query-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
 import { getErrorMessage } from '@common/utils/error.util';
-// 📸 사진 저장을 위한 유틸리티 임포트
 import { saveProfileImage } from '@common/utils/file-upload.util';
 import * as bcrypt from 'bcrypt';
 
@@ -47,7 +46,6 @@ export class EmployeeService {
   async register(dto: RegisterEmployeeDto, adminId: string) {
     const TODAY = getKstDate();
 
-    // 1-1. 중복 체크 (id, no, residentNo)
     const existing = await this.prisma.employee.findFirst({
       where: {
         OR: [{ id: dto.id }, { no: dto.no }, { AND: [{ residentNo: dto.residentNo }, { exitDate: null }] }],
@@ -60,7 +58,6 @@ export class EmployeeService {
       throw new ConflictException('이미 등록된 주민번호입니다.');
     }
 
-    // 📸 사진 업로드 처리 로직
     let savedProfilePath = dto.profilePath;
     if (dto.profileImageBase64) {
       const uploadedPath = saveProfileImage(dto.profileImageBase64, dto.no);
@@ -88,7 +85,8 @@ export class EmployeeService {
             departmentId: dto.departmentId,
             teamId: dto.teamId,
             deptId: dto.deptId,
-            jobLevel: dto.jobLevel, // 🌟 수정: jobPosition/jobTitle 대신 jobLevel 사용
+            // ✅ 수정: jobLevel -> jobPosition
+            jobPosition: dto.jobLevel, 
             jobRole: dto.jobRole,
             assignStatus: dto.assignStatus,
             authLevel: dto.authLevel,
@@ -98,7 +96,6 @@ export class EmployeeService {
           },
         });
 
-        // 상세정보 생성
         await tx.employeeDetail.create({
           data: {
             employeeId: employee.id,
@@ -117,26 +114,26 @@ export class EmployeeService {
           },
         });
 
-        // 최초 부서 이력 생성
         await tx.employeeOrganizationHistory.create({
           data: {
             employeeId: employee.id,
-            departmentId: dto.departmentId || 0, // 🌟 Prisma 요구사항에 따라 0 등 기본값 처리 필요할 수 있음
+            departmentId: dto.departmentId || 0,
             teamId: dto.teamId,
-            jobLevel: dto.jobLevel, // 🌟 수정
+            // ✅ 수정: jobLevel -> jobPosition
+            jobPosition: dto.jobLevel, 
             jobRole: dto.jobRole,
             applyDate: new Date(TODAY),
           },
         });
 
-        // 전직장 경력 등록
         if (dto.previousExperiences && dto.previousExperiences.length > 0) {
           await tx.previousExperience.createMany({
             data: dto.previousExperiences.map((exp) => ({
               employeeId: employee.id,
               companyName: exp.companyName,
               department: exp.department,
-              jobLevel: exp.jobLevel, // 🌟 수정: 스키마에 맞게 jobPosition -> jobLevel 변경
+              // 💡 PreviousExperience 모델은 스키마에 jobLevel 필드가 있으므로 그대로 유지
+              jobLevel: exp.jobLevel, 
               jobRole: exp.jobRole,
               relevance: exp.relevance,
               entranceDate: new Date(exp.entranceDate),
@@ -146,7 +143,6 @@ export class EmployeeService {
           });
         }
 
-        // 자격증 등록
         if (dto.certificates && dto.certificates.length > 0) {
           for (const cert of dto.certificates) {
             const newCert = await tx.certificate.create({
@@ -178,7 +174,6 @@ export class EmployeeService {
           }
         }
 
-        // 자산 할당
         if (dto.assetIds && dto.assetIds.length > 0) {
           await tx.asset.updateMany({
             where: {
@@ -252,7 +247,8 @@ export class EmployeeService {
           department: targetOrgName,
           deptId: emp.departmentId,
           teamId: emp.teamId,
-          jobLevel: emp.jobLevel, // 🌟 수정
+          // ✅ 수정: jobPosition 값을 jobLevel 키로 반환 (프론트 엔드 호환성)
+          jobLevel: emp.jobPosition, 
           jobRole: emp.jobRole,
           assignStatus: emp.assignStatus,
           skillLevel: emp.employeeDetail?.skillLevel || '초급',
@@ -303,7 +299,7 @@ export class EmployeeService {
 
     if (!employee) throw new NotFoundException();
 
-    return this.mapToDetailDto(employee as EmployeeWithRelations);
+    return this.mapToDetailDto(employee as any as EmployeeWithRelations);
   }
 
   // =======================================================================
@@ -313,7 +309,6 @@ export class EmployeeService {
     return this.prisma.$transaction(async (tx) => {
       const { techStack, communicationTool, apiTool, otherTool, technicalAbility, projects, ...basicDto } = dto;
 
-      // 4-1. 사원 기본 정보 수정
       await tx.employee.update({
         where: { id },
         data: {
@@ -322,16 +317,16 @@ export class EmployeeService {
           departmentId: basicDto.departmentId ? Number(basicDto.departmentId) : undefined,
           teamId: basicDto.teamId ? Number(basicDto.teamId) : undefined,
           deptId: basicDto.deptId ? Number(basicDto.deptId) : undefined,
-          jobLevel: basicDto.jobLevel, // 🌟 수정
+          // ✅ 수정: jobLevel -> jobPosition
+          jobPosition: basicDto.jobLevel, 
           jobRole: basicDto.jobRole,
           assignStatus: basicDto.assignStatus,
-          authLevel: basicDto.authLevel, // 🌟 누락되었던 authLevel 업데이트 추가
+          authLevel: basicDto.authLevel,
           email: basicDto.email,
           phone: basicDto.phone,
         },
       });
 
-      // 4-2. 사원 상세 정보 수정
       await tx.employeeDetail.update({
         where: { employeeId: id },
         data: {
@@ -348,7 +343,6 @@ export class EmployeeService {
         },
       });
 
-      // 4-3. 기술 역량 (TechnicalAbility)
       if (technicalAbility) {
         await tx.technicalAbility.upsert({
           where: { employeeId: id },
@@ -359,7 +353,7 @@ export class EmployeeService {
             testExecution: technicalAbility.testExecution,
           },
           create: {
-            employeeId: id, // 🌟 올바른 관계 생성 방식으로 수정 완료
+            employeeId: id,
             communicationSkill: technicalAbility.communication,
             officeSkill: technicalAbility.officeSkill,
             testDesign: technicalAbility.testDesign,
@@ -368,7 +362,6 @@ export class EmployeeService {
         });
       }
 
-      // 4-4. 사용 가능 도구 및 기술 스택 (EmployeeTool) 업데이트
       if (techStack !== undefined || communicationTool !== undefined || apiTool !== undefined || otherTool !== undefined) {
         await tx.employeeTool.upsert({
           where: { employeeId: id },
@@ -388,7 +381,6 @@ export class EmployeeService {
         });
       }
 
-      // 4-5. 자격증 동기화
       if (basicDto.certificates) {
         const validCertIds = basicDto.certificates.map((c: any) => c.id).filter((id: any) => typeof id === 'number');
 
@@ -426,9 +418,8 @@ export class EmployeeService {
         }
       }
 
-      // 4-6. 프로젝트 투입 이력
-      await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
       if (projects && projects.length > 0) {
+        await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
         await tx.projectAssignment.createMany({
           data: projects.map((proj: ProjectAssignmentDto) => ({
             employeeId: id,
@@ -445,8 +436,6 @@ export class EmployeeService {
     });
   }
 
-  // --- 헬퍼 함수들 ---
-
   private isWithinCareerRange(years: number, range: CareerRange): boolean {
     const ranges = {
       [CareerRange.BEGINNER]: years <= 3,
@@ -455,13 +444,6 @@ export class EmployeeService {
       [CareerRange.EXPERT]: years >= 13,
     };
     return ranges[range] ?? true;
-  }
-
-  private calculatePeriod(start: Date | null, end: Date | null): string {
-    if (!start) return '기간 미상';
-    const startYear = start.getFullYear();
-    const endYear = end ? end.getFullYear() : '현재';
-    return `${startYear} ~ ${endYear}`;
   }
 
   private mapToDetailDto(emp: EmployeeWithRelations): EmployeeDetailResponseDto {
@@ -480,7 +462,8 @@ export class EmployeeService {
         gender: emp.gender,
         departmentId: emp.departmentId,
         teamId: emp.teamId,
-        jobLevel: emp.jobLevel, // 🌟 수정
+        // ✅ 수정: jobPosition 사용
+        jobLevel: emp.jobPosition, 
         jobRole: emp.jobRole,
         assignStatus: emp.assignStatus,
         email: emp.email,
@@ -509,20 +492,20 @@ export class EmployeeService {
         remarks: emp.employeeDetail?.remarks || null,
         profileImage: emp.employeeDetail?.profilePath ?? null,
 
-        previousExperiences:
-          emp.previousExperiences.map((exp) =>
-            JSON.stringify({
-              id: exp.id,
-              companyName: exp.companyName,
-              department: exp.department,
-              jobLevel: exp.jobLevel, // 🌟 수정
-              jobRole: exp.jobRole,
-              entranceDate: exp.entranceDate,
-              resignationDate: exp.resignationDate,
-              assignedTask: exp.assignedTask,
-              relevance: exp.relevance,
-            }),
-          ) ?? [],
+        previousExperiences: emp.previousExperiences.map((exp) =>
+          JSON.stringify({
+            id: exp.id,
+            companyName: exp.companyName,
+            department: exp.department,
+            // 💡 PreviousExperience는 스키마상 jobLevel이 있으므로 유지
+            jobLevel: exp.jobLevel, 
+            jobRole: exp.jobRole,
+            entranceDate: exp.entranceDate,
+            resignationDate: exp.resignationDate,
+            assignedTask: exp.assignedTask,
+            relevance: exp.relevance,
+          }),
+        ) ?? [],
 
         assetsList: emp.assets?.map((assets) => `${assets.name} (${assets.typeId})`) ?? [],
       },

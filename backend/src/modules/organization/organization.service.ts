@@ -59,9 +59,7 @@ export class OrganizationService {
         employee: true,
         projects: {
           where: {
-            status: {
-              in: ['IN_PROGRESS', 'PLANNED'],
-            },
+            status: { in: ['IN_PROGRESS', 'PLANNED'] },
           },
           take: 1,
           orderBy: { startDate: 'desc' },
@@ -251,10 +249,10 @@ export class OrganizationService {
           projectName: currentProject?.name || '',
           projectPeriod: currentProject ? `${formatDate(currentProject.startDate)} ~ ${formatDate(currentProject.endDate)}` : '',
 
-          // 🌟 수정: jobPosition, jobTitle 대신 jobLevel, jobRole 사용
+          // ✅ 수정: h.jobLevel 대신 h.jobPosition 사용 (이력 테이블 필드 교정)
           members: targetHistory.map((h: any) => ({
             name: h.employee.nameKr,
-            position: h.jobLevel || h.jobRole || '팀원',
+            position: h.jobPosition || h.jobRole || '팀원',
           })),
         };
       };
@@ -373,6 +371,9 @@ export class OrganizationService {
     });
   }
 
+  /**
+   * [중요] 부서 이동 및 이력 생성 내부 메서드
+   */
   private async transferEmployeesWithHistory(tx: Prisma.TransactionClient, memberIds: string[], targetDeptId: number, applyDate: Date) {
     if (memberIds.length === 0) return;
 
@@ -382,19 +383,19 @@ export class OrganizationService {
     });
     if (!targetDept) throw new NotFoundException('대상 부서를 찾을 수 없습니다.');
 
-    // 🌟 수정: jobPosition, jobTitle 대신 jobLevel, jobRole 조회
+    // ✅ 수정: jobLevel 대신 실제 필드인 jobPosition 조회
     const currentEmployees = await tx.employee.findMany({
       where: { id: { in: memberIds } },
-      select: { id: true, jobLevel: true, jobRole: true },
+      select: { id: true, jobPosition: true, jobRole: true },
     });
 
-    // 🌟 수정: 이력(History) 테이블 생성 시 jobLevel, jobRole 매핑
+    // ✅ 수정: 이력 생성 시 jobPosition 필드로 매핑
     await tx.employeeOrganizationHistory.createMany({
       data: currentEmployees.map((emp: any) => ({
         employeeId: emp.id,
         departmentId: targetDept.parentId ?? targetDeptId,
         teamId: targetDeptId,
-        jobLevel: emp.jobLevel,
+        jobPosition: emp.jobPosition, // jobLevel -> jobPosition
         jobRole: emp.jobRole,
         applyDate: applyDate,
         memo: '조직 개편/폐지에 따른 자동 이동 예약',
