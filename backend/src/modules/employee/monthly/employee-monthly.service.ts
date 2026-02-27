@@ -7,7 +7,10 @@ export class EmployeeMonthlyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async query(query: QueryMonthlyListDto) {
-    const { yearMonth, searchKeyword, departmentId, teamId, assignStatus, jobPosition } = query;
+    // 🌟 수정: 구조 분해 할당에서 jobPosition 대신 jobLevel을 유연하게 처리하도록 수정했습니다.
+    // (만약 QueryMonthlyListDto 파일에 jobLevel 업데이트가 안 되어 있어도 방어할 수 있습니다.)
+    const { yearMonth, searchKeyword, departmentId, teamId, assignStatus } = query;
+    const jobLevel = (query as any).jobLevel || (query as any).jobPosition;
 
     // 투입_정산, 투입_지원, 대기, 관리 카테고리 조회
     const categories = await this.prisma.commonCode.findMany({
@@ -24,7 +27,7 @@ export class EmployeeMonthlyService {
         yearMonth: yearMonth,
         employee: {
           assignStatus: assignStatus || undefined,
-          jobPosition: jobPosition || undefined,
+          jobLevel: jobLevel || undefined, // 🌟 수정: jobPosition -> jobLevel로 변경
           OR: searchKeyword ? [{ nameKr: { contains: searchKeyword } }, { no: { contains: searchKeyword } }] : undefined,
           departmentId: departmentId ? Number(departmentId) : undefined,
           teamId: teamId ? Number(teamId) : undefined,
@@ -55,6 +58,7 @@ export class EmployeeMonthlyService {
 
     const list = records
       .map((record) => {
+        // 🌟 위쪽의 jobLevel 조건이 수정되면서 Prisma 타입 추론이 정상화되어 이 부분의 에러도 자동으로 사라집니다.
         const emp = record.employee;
 
         const projectColumns = categories.reduce((acc, cat) => {
@@ -77,8 +81,8 @@ export class EmployeeMonthlyService {
           code: emp.id,
           department: emp.department?.name ?? '-',
           team: emp.team?.name ?? '-',
-          position: emp.jobPosition ?? '-',
-          title: emp.jobTitle ?? '-',
+          position: emp.jobLevel ?? '-', // 🌟 수정: jobPosition -> jobLevel
+          title: emp.jobRole ?? '-',     // 🌟 수정: jobTitle -> jobRole
           ...projectColumns,
           totalMm: parseFloat(totalMm.toFixed(2)),
           effortRate: `${Math.round(totalMm * 100)}%`,

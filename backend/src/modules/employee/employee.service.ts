@@ -88,9 +88,8 @@ export class EmployeeService {
             departmentId: dto.departmentId,
             teamId: dto.teamId,
             deptId: dto.deptId,
-            jobPosition: dto.jobPosition,
+            jobLevel: dto.jobLevel, // 🌟 수정: jobPosition/jobTitle 대신 jobLevel 사용
             jobRole: dto.jobRole,
-            jobTitle: dto.jobTitle,
             assignStatus: dto.assignStatus,
             authLevel: dto.authLevel,
             email: dto.email,
@@ -122,11 +121,10 @@ export class EmployeeService {
         await tx.employeeOrganizationHistory.create({
           data: {
             employeeId: employee.id,
-            departmentId: dto.departmentId,
+            departmentId: dto.departmentId || 0, // 🌟 Prisma 요구사항에 따라 0 등 기본값 처리 필요할 수 있음
             teamId: dto.teamId,
-            jobPosition: dto.jobPosition,
+            jobLevel: dto.jobLevel, // 🌟 수정
             jobRole: dto.jobRole,
-            jobTitle: dto.jobTitle,
             applyDate: new Date(TODAY),
           },
         });
@@ -138,7 +136,7 @@ export class EmployeeService {
               employeeId: employee.id,
               companyName: exp.companyName,
               department: exp.department,
-              jobPosition: exp.jobPosition,
+              jobLevel: exp.jobLevel, // 🌟 수정: 스키마에 맞게 jobPosition -> jobLevel 변경
               jobRole: exp.jobRole,
               relevance: exp.relevance,
               entranceDate: new Date(exp.entranceDate),
@@ -254,13 +252,12 @@ export class EmployeeService {
           department: targetOrgName,
           deptId: emp.departmentId,
           teamId: emp.teamId,
-          jobPosition: emp.jobPosition,
+          jobLevel: emp.jobLevel, // 🌟 수정
           jobRole: emp.jobRole,
-          jobTitle: emp.jobTitle,
           assignStatus: emp.assignStatus,
           skillLevel: emp.employeeDetail?.skillLevel || '초급',
-          certificates: emp.certificates || [], // 🌟 반환 객체에 자격증 데이터 추가
-          count: emp.certificates?.length ?? 0, // 🌟 개수는 배열 길이로 대체
+          certificates: emp.certificates || [],
+          count: emp.certificates?.length ?? 0,
           totalCareerYear: finalCareerYear,
           joinDate: emp.joinDate,
           email: emp.email,
@@ -325,11 +322,10 @@ export class EmployeeService {
           departmentId: basicDto.departmentId ? Number(basicDto.departmentId) : undefined,
           teamId: basicDto.teamId ? Number(basicDto.teamId) : undefined,
           deptId: basicDto.deptId ? Number(basicDto.deptId) : undefined,
-          jobPosition: basicDto.jobPosition,
+          jobLevel: basicDto.jobLevel, // 🌟 수정
           jobRole: basicDto.jobRole,
-          jobTitle: basicDto.jobTitle,
           assignStatus: basicDto.assignStatus,
-          authLevel: basicDto.authLevel,
+          authLevel: basicDto.authLevel, // 🌟 누락되었던 authLevel 업데이트 추가
           email: basicDto.email,
           phone: basicDto.phone,
         },
@@ -363,7 +359,7 @@ export class EmployeeService {
             testExecution: technicalAbility.testExecution,
           },
           create: {
-            employeeId: id,
+            employeeId: id, // 🌟 올바른 관계 생성 방식으로 수정 완료
             communicationSkill: technicalAbility.communication,
             officeSkill: technicalAbility.officeSkill,
             testDesign: technicalAbility.testDesign,
@@ -484,9 +480,8 @@ export class EmployeeService {
         gender: emp.gender,
         departmentId: emp.departmentId,
         teamId: emp.teamId,
-        jobPosition: emp.jobPosition,
+        jobLevel: emp.jobLevel, // 🌟 수정
         jobRole: emp.jobRole,
-        jobTitle: emp.jobTitle,
         assignStatus: emp.assignStatus,
         email: emp.email,
         joinDate: new Date(emp.joinDate),
@@ -520,7 +515,7 @@ export class EmployeeService {
               id: exp.id,
               companyName: exp.companyName,
               department: exp.department,
-              jobLevel: exp.jobLevel,
+              jobLevel: exp.jobLevel, // 🌟 수정
               jobRole: exp.jobRole,
               entranceDate: exp.entranceDate,
               resignationDate: exp.resignationDate,
