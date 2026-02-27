@@ -33,6 +33,16 @@ export class CertificateDto {
   @IsString() issuingAuthority: string;
 }
 
+// export class ProjectAssignmentDto {
+//   @IsString() projectId: string; // 연결할 프로젝트 ID
+//   @IsDate() @Type(() => Date) startDate: Date;
+//   @IsDate() @IsOptional() @Type(() => Date) endDate?: Date;
+//   @IsString() @IsOptional() assignedRole?: string;
+//   @IsString() @IsOptional() tools?: string;
+//   @IsString() @IsOptional() workDetail?: string;
+//   @IsString() @IsOptional() contribution?: string;
+// }
+
 export class UpdateEmployeeDto {
   // 1. 사원 기본 정보 (Employee)
   @ApiProperty({ description: '영어 성명', example: 'Hong Gil Dong', required: false })
@@ -74,13 +84,17 @@ export class UpdateEmployeeDto {
   @IsOptional()
   authLevel?: string;
 
-  // 🌟 변경됨: jobPosition, jobTitle이 삭제되고 jobLevel로 통합되었습니다!
   @ApiProperty({ description: '직급', example: '과장' })
   @IsString()
   @IsOptional()
-  jobLevel?: string;
+  jobPosition?: string;
 
-  @ApiProperty({ description: '직무/직책', example: '개발자, 테스터, 경영지원, 팀장' })
+  @ApiProperty({ description: '직책', example: '팀장, 실장,' })
+  @IsString()
+  @IsOptional()
+  jobTitle?: string;
+
+  @ApiProperty({ description: '직무', example: '개발자, 테스터, 경영지원' })
   @IsString()
   @IsOptional()
   jobRole?: string;
@@ -166,7 +180,7 @@ export class UpdateEmployeeDto {
   @Type(() => ProjectAssignmentDto)
   projects?: ProjectAssignmentDto[];
 
-  // 👇 프론트엔드에서 넘어오는 새로운 도구/기술 데이터 허용 (기존 유지)
+  // 👇 [추가된 부분] 프론트엔드에서 넘어오는 새로운 도구/기술 데이터 허용
   @ApiPropertyOptional({ description: '기술 스택 및 결함관리 도구', example: 'JAVA,REACT' })
   @IsString()
   @IsOptional()

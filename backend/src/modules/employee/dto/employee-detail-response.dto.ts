@@ -15,11 +15,9 @@ export class EmployeeDetailResponseDto {
     gender: string;
     departmentId: number | null;
     teamId: number | null;
-    
-    // 🌟 수정됨: jobPosition, jobTitle을 삭제하고 jobLevel로 통합
-    jobLevel: string | null; 
+    jobPosition: string | null;
     jobRole: string | null;
-    
+    jobTitle: string | null;
     assignStatus: string | null;
     email: string | null;
     joinDate: Date;

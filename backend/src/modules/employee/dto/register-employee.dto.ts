@@ -12,10 +12,9 @@ export class PreProjectAssignmentDto {
   @IsString()
   department: string;
 
-  // 🌟 변경됨: jobPosition -> jobLevel
   @ApiProperty({ description: '최종 직급', example: '과장' })
   @IsString()
-  jobLevel: string;
+  jobPosition: string;
 
   @ApiProperty({ description: '담당업무', example: '프론트 개발자' })
   @IsString()
@@ -155,13 +154,17 @@ export class RegisterEmployeeDto {
   @IsOptional()
   authLevel?: string;
 
-  // 🌟 변경됨: jobPosition과 jobTitle을 합쳐서 jobLevel 하나로 만듦
   @ApiProperty({ description: '직급', example: '과장' })
   @IsString()
   @IsOptional()
-  jobLevel?: string;
+  jobPosition?: string;
 
-  @ApiProperty({ description: '직무/직책', example: '테스터, 개발자, 팀장' })
+  @ApiProperty({ description: '직책', example: '팀장' })
+  @IsString()
+  @IsOptional()
+  jobTitle?: string;
+
+  @ApiProperty({ description: '직무', example: '테스터, 개발자' })
   @IsString()
   @IsOptional()
   jobRole?: string;
@@ -217,11 +220,13 @@ export class RegisterEmployeeDto {
   @IsOptional()
   maritalStatus?: string;
 
+  // 📆 [추가] 결혼기념일 필드 (서비스 로직에 weddingAnniv 매핑이 있어 추가 필요)
   @ApiPropertyOptional({ description: '결혼기념일 (YYYY-MM-DD)', example: '2020-05-20' })
   @IsDateString()
   @IsOptional()
   weddingAnniv?: string;
 
+  // 📞 [추가] 비상연락망 (서비스 로직에 매핑이 있어 추가 필요)
   @ApiPropertyOptional({ description: '비상연락처', example: '010-9999-9999' })
   @IsString()
   @IsOptional()
@@ -256,6 +261,7 @@ export class RegisterEmployeeDto {
   @IsOptional()
   profilePath?: string;
 
+  // 📸 [추가됨] 프론트엔드에서 보내는 Base64 이미지 데이터
   @ApiPropertyOptional({ description: '프로필 이미지 Base64 데이터', example: 'data:image/png;base64,iVBORw0KGgo...' })
   @IsString()
   @IsOptional()

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, InternalServerErrorException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TeamStructureDto } from 'src/modules/common/dto/team-structure.dto';
 import { OrgChartDto } from 'src/modules/common/dto/org-chart.dto';
@@ -16,7 +22,6 @@ export class CommonService {
     const team = await this.prisma.organization.findUnique({
       where: { id: teamId },
       include: {
-        // 1. 하위 팀(Children) 조회
         children: {
           select: {
             id: true,
@@ -24,7 +29,6 @@ export class CommonService {
             _count: { select: { employee: true } },
           },
         },
-        // 2. 소속 구성원(Employees) 조회
         employee: {
           where: {
             employeeDetail: {
@@ -72,7 +76,6 @@ export class CommonService {
       const startOfToday = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0, 0);
       const endOfToday = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 23, 59, 59, 999);
 
-      // 1. 조직 조회
       const rawOrgs = await this.prisma.organization.findMany({
         where: {
           AND: [{ startDate: { lte: endOfToday } }, { endDate: { gt: startOfToday } }],
@@ -88,12 +91,11 @@ export class CommonService {
         },
       });
 
-      // 2. 직원 조회 (현 소속 조직 = deptId)
       const employees = includeMembers
         ? await this.prisma.employee.findMany({
             where: {
               deptId: { not: null },
-              employeeDetail: { is: { hrStatus: 'EMPLOYED' } }, // 재직중
+              employeeDetail: { is: { hrStatus: 'EMPLOYED' } },
             },
             select: {
               id: true,
@@ -104,7 +106,6 @@ export class CommonService {
           })
         : [];
 
-      // 3. deptId 기준 직원 Map 생성 (string key로 통일)
       const empMap = new Map<string, typeof employees>();
       employees.forEach((emp) => {
         if (!emp.deptId) return;
@@ -113,7 +114,6 @@ export class CommonService {
         empMap.get(key)!.push(emp);
       });
 
-      // 4. 조직 Map 생성 (string key)
       const orgMap = new Map<string, OrgChartDto>();
       rawOrgs.forEach((org) => {
         const currentProject = org.projects?.[0] || null;
@@ -143,7 +143,6 @@ export class CommonService {
         orgMap.set(String(org.id), node);
       });
 
-      // 5. 조직 트리 구성
       const rootNodes: OrgChartDto[] = [];
       rawOrgs.forEach((org) => {
         const currentNode = orgMap.get(String(org.id))!;
@@ -157,7 +156,6 @@ export class CommonService {
         }
       });
 
-      // 6. level 계산 (재귀)
       const setLevel = (nodes: OrgChartDto[], level: number) => {
         nodes.forEach((node) => {
           node.level = level;
@@ -174,7 +172,6 @@ export class CommonService {
     }
   }
 
-  // 팀 목록: 선택된 부서 ID로 필터링
   async getRootOrganizations() {
     return this.prisma.organization.findMany({
       where: { parentId: { not: null }, parent: { parentId: null } },
@@ -201,25 +198,29 @@ export class CommonService {
     return department.children;
   }
 
-  // 🌟 에러의 원인이었던 부분을 최신 스키마(jobLevel, jobRole)에 맞게 완벽하게 수정했습니다.
+  // 🌟 DB 스키마(1번 코드 베이스)에 맞게 jobPosition과 jobTitle 유지
   async findMembersByTeam(teamId: number) {
     const members = await this.prisma.employee.findMany({
       where: {
         teamId: teamId,
         employeeDetail: {
-          hrStatus: 'EMPLOYED',
+          // 🌟 해결: 관계형 데이터 검색을 위해 'is' 키워드 추가
+          is: {
+            hrStatus: 'EMPLOYED',
+          },
         },
       },
       select: {
         id: true,
         nameKr: true,
-        jobLevel: true, // 👈 jobPosition -> jobLevel 변경
-        jobRole: true,  // 👈 jobTitle은 삭제되고 jobRole 사용
+        jobPosition: true,
+        jobRole: true,
+        jobTitle: true,
         department: {
-          select: { name: true }, // 👈 department 정보 가져오기 유지
+          select: { name: true },
         },
         team: {
-          select: { name: true }, // 👈 team 정보 가져오기 유지
+          select: { name: true },
         },
       },
       orderBy: {
@@ -230,9 +231,7 @@ export class CommonService {
     return members.map((m) => ({
       id: m.id,
       name: m.nameKr,
-      // 🌟 jobPosition, jobTitle 조합 로직을 jobLevel, jobRole 로직으로 변경
-      jobTitle: m.jobRole ? `${m.jobLevel}(${m.jobRole})` : m.jobLevel || '사원',
-      // 이제 위쪽 쿼리에서 department와 team을 안전하게 가져오므로 에러가 사라집니다.
+      jobTitle: m.jobTitle ? `${m.jobPosition}(${m.jobTitle})` : m.jobPosition || '사원',
       parentName: m.department?.name || '',
       teamName: m.team?.name || '',
     }));
@@ -244,10 +243,8 @@ export class CommonService {
 
   async getCodesByType(type: string) {
     return this.prisma.commonCode.findMany({
-      where: { 
-        type,
-      },
-      orderBy: { id: 'asc' }, 
+      where: { type },
+      orderBy: { id: 'asc' },
     });
   }
 
@@ -275,7 +272,7 @@ export class CommonService {
     });
 
     return grouped.map((group) => ({
-      id: group.type, 
+      id: group.type,
       categoryCode: group.type,
       categoryName: group.type,
       description: `총 ${group._count.code}개의 코드`,
@@ -284,6 +281,7 @@ export class CommonService {
     }));
   }
 
+  // 🌟 2번 코드의 안전장치(시퀀스 강제 동기화) 추가됨
   async createCode(dto: { type: string; code: string; name: string; description?: string }) {
     if (!dto.type || !dto.code) {
       throw new BadRequestException('유형(type)과 코드(code)는 필수입니다.');
@@ -300,6 +298,7 @@ export class CommonService {
       throw new ConflictException('이미 해당 타입 내에 존재하는 코드입니다.');
     }
 
+    // [핵심] 시퀀스 동기화 (빈 테이블 에러 방지를 위해 COALESCE 적용)
     try {
       await this.prisma.$executeRawUnsafe(`
         SELECT setval('common_code_id_seq', COALESCE((SELECT MAX(id) FROM "common_code"), 1));
@@ -313,7 +312,7 @@ export class CommonService {
         type: dto.type,
         code: dto.code,
         name: dto.name,
-        attr1: dto.description, 
+        attr1: dto.description,
         isUsed: true,
       },
     });
@@ -343,6 +342,7 @@ export class CommonService {
     });
   }
 
+  // 🌟 기존 로직 유지 + 빈 테이블 고려한 COALESCE 추가
   async createCategory(dto: { categoryCode: string; firstCode: string; firstName: string; firstDesc?: string }) {
     if (!dto.categoryCode) {
       console.log('❌ [ERROR] categoryCode가 없습니다!');
@@ -350,12 +350,10 @@ export class CommonService {
     }
 
     console.log(`🔎 [DB 검색] type이 '${dto.categoryCode}'인 데이터 찾는 중...`);
-    
+
     const exists = await this.prisma.commonCode.findFirst({
       where: { type: dto.categoryCode },
     });
-
-    console.log('📄 [DB 검색 결과]:', exists); 
 
     if (exists) {
       console.log('⚠️ [CONFLICT] 이미 존재함 판정 -> 409 에러 발생');
@@ -364,25 +362,24 @@ export class CommonService {
 
     console.log('✅ [PASS] 중복 없음. 생성 시작...');
 
+    // [핵심] 시퀀스 동기화 (빈 테이블 에러 방지를 위해 COALESCE 적용)
     try {
       await this.prisma.$executeRawUnsafe(`
-        SELECT setval('common_code_id_seq', (SELECT MAX(id) FROM "common_code"));
+        SELECT setval('common_code_id_seq', COALESCE((SELECT MAX(id) FROM "common_code"), 1));
       `);
       console.log('🔧 [FIX] ID 시퀀스(번호표) 동기화 완료');
     } catch (e) {
       console.log('⚠️ 시퀀스 조정 실패 (무시 가능):', e instanceof Error ? e.message : e);
     }
 
-    const result = await this.prisma.commonCode.create({
+    return this.prisma.commonCode.create({
       data: {
-        type: dto.categoryCode,    
-        code: dto.firstCode,       
-        name: dto.firstName,       
-        attr1: dto.firstDesc,      
+        type: dto.categoryCode,
+        code: dto.firstCode,
+        name: dto.firstName,
+        attr1: dto.firstDesc,
         isUsed: true,
       },
     });
-    
-    return result;
   }
 }

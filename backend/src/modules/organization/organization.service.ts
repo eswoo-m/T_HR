@@ -5,7 +5,9 @@ import { parseDate, toSafeDate, subtractDaysSafe, formatDate, DB_MAX_DATE } from
 import { OrganizationDetailResponseDto } from './dto/organization-detail-response.dto';
 import { RegisterOrganizationDto } from './dto/register-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+// import { GetOrganizationHistoryDto } from '@modules/organization/dto/get-organization-history.dto';
 import { OrgHistoryResponse } from '@modules/organization/dto/organization-history-response';
+// import { GetOrganizationHistoryDto, OrgChangeType } from '@modules/organization/dto/get-organization-history.dto';
 import dayjs from 'dayjs';
 import { UpdateOrganizationScheduledDto } from '@modules/organization/dto/update-organization-scheduled.dto';
 
@@ -188,16 +190,19 @@ export class OrganizationService {
 
       if (!org || !org.parentId) throw new BadRequestException('폐지할 수 없는 조직입니다. 🛡️');
 
+      // 💡 날짜 계산: 폐지일(exitDate) 다음 날을 적용일로 설정 🚀
       const exitDateObj = new Date(exitDate);
       const applyDate = new Date(exitDateObj);
-      applyDate.setDate(exitDateObj.getDate() + 1);
+      applyDate.setDate(exitDateObj.getDate() + 1); // 하루 더하기! ㅋ
 
       const memberIds = org.employee.map((emp) => emp.id);
 
+      // 1. 공통 로직 호출 (적용일은 폐지 다음 날로!)
       if (memberIds.length > 0) {
         await this.transferEmployeesWithHistory(tx, memberIds, org.parentId, applyDate);
       }
 
+      // 2. 조직 폐지 (endDate는 폐지일 당일로)
       return tx.organization.update({
         where: { id },
         data: { endDate: exitDateObj },
@@ -251,14 +256,14 @@ export class OrganizationService {
           projectName: currentProject?.name || '',
           projectPeriod: currentProject ? `${formatDate(currentProject.startDate)} ~ ${formatDate(currentProject.endDate)}` : '',
 
-          // 🌟 수정: jobPosition, jobTitle 대신 jobLevel, jobRole 사용
-          members: targetHistory.map((h: any) => ({
+          members: targetHistory.map((h) => ({
             name: h.employee.nameKr,
-            position: h.jobLevel || h.jobRole || '팀원',
+            position: h.jobPosition || h.jobTitle || '팀원',
           })),
         };
       };
 
+      // --- 신설/폐지 분류 로직 (기존 유지) ---
       const newEntry = mapOrgToEntry('신설', org.startDate);
       if (dayjs(org.startDate).isAfter(today)) {
         scheduled.push(newEntry);
@@ -282,6 +287,7 @@ export class OrganizationService {
     };
   }
 
+  // 부서이동
   async updateMembersDepartment(memberIds: string[], targetDeptId: number) {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -293,6 +299,54 @@ export class OrganizationService {
           message: `부서 이동 및 이력 생성이 완료되었습니다.`,
         };
       });
+      // return await this.prisma.$transaction(async (tx) => {
+      //   const targetDept = await tx.organization.findUnique({
+      //     where: { id: targetDeptId },
+      //     select: { id: true, parentId: true, name: true },
+      //   });
+      //
+      //   if (!targetDept) throw new NotFoundException('대상 부서를 찾을 수 없습니다.');
+      //
+      //   // 2. 현재 대상 사원들의 직급/직무 등 기본 정보 조회
+      //   const currentEmployees = await tx.employee.findMany({
+      //     where: { id: { in: memberIds } },
+      //     select: {
+      //       id: true,
+      //       jobLevel: true,
+      //       jobRole: true,
+      //       // deptId 등 이전 정보가 필요하면 여기서 추가 조회 ㅋ
+      //     },
+      //   });
+      //
+      //   // 3. 사원 테이블 업데이트 (사원의 소속을 새 부서로 변경) 🚀
+      //   await tx.employee.updateMany({
+      //     where: { id: { in: memberIds } },
+      //     data: {
+      //       deptId: targetDeptId,
+      //       teamId: targetDeptId,
+      //       departmentId: targetDept.parentId ?? targetDeptId,
+      //     },
+      //   });
+      //
+      //   // 4. 이력(History) 테이블 기록 생성
+      //   // 💡 주의: History 모델의 필드명이 아래와 일치하는지 확인하세요!
+      //   await tx.employeeOrganizationHistory.createMany({
+      //     data: currentEmployees.map((emp) => ({
+      //       employeeId: emp.id,
+      //       departmentId: targetDept.parentId ?? targetDeptId,
+      //       teamId: targetDeptId,
+      //       jobLevel: emp.jobLevel,
+      //       jobRole: emp.jobRole,
+      //       applyDate: new Date(),
+      //     })),
+      //   });
+      //
+      //   return {
+      //     success: true,
+      //     count: currentEmployees.length,
+      //     message: `${targetDept.name} 부서로 이동 및 이력 생성이 완료되었습니다. 🛡️`,
+      //   };
+      // });
     } catch (error: any) {
       console.error('부서 이동 트랜잭션 에러:', error);
       throw new InternalServerErrorException('부서 이동 처리 중 오류 발생');
@@ -300,6 +354,7 @@ export class OrganizationService {
   }
 
   async updateScheduledChange(id: number, dto: UpdateOrganizationScheduledDto) {
+    // 1. organization 테이블에서 해당 ID가 존재하는지 확인 🕵️‍♂️
     const existingOrg = await this.prisma.organization.findUnique({ where: { id } });
     if (!existingOrg) throw new NotFoundException('조직 데이터를 찾을 수 없습니다.');
 
@@ -331,11 +386,13 @@ export class OrganizationService {
         updateData.endDate = parseDate(dto.date);
       }
 
+      // 조직정보 업데이트
       const updatedOrg = await tx.organization.update({
         where: { id },
         data: updateData,
       });
 
+      // 프로젝트 정보 업데이트
       if (dto.projectId && dto.projectId !== 0) {
         await tx.project.updateMany({
           where: { teamId: id },
@@ -353,6 +410,9 @@ export class OrganizationService {
         });
       }
 
+      // 프로젝트 연결로 팀 인력을 project_assignment, project_assignment_period insert 해야한다.
+
+      // 구성원 추가
       if (dto.members) {
         const currentMemberIds = dto.members.map((m) => String(m.id));
 
@@ -373,29 +433,39 @@ export class OrganizationService {
     });
   }
 
+  /**
+   * [공통] 구성원 부서 이동 및 이력 생성 로직
+   * @param tx Prisma Transaction Client
+   * @param memberIds 이동할 사원 ID 배열
+   * @param targetDeptId 목적지 부서 ID
+   * @param applyDate 적용일 (이력용)
+   */
   private async transferEmployeesWithHistory(tx: Prisma.TransactionClient, memberIds: string[], targetDeptId: number, applyDate: Date) {
     if (memberIds.length === 0) return;
 
+    // 1. 대상 부서 정보 조회 (상위 조직 정보 포함)
     const targetDept = await tx.organization.findUnique({
       where: { id: targetDeptId },
       select: { id: true, parentId: true },
     });
     if (!targetDept) throw new NotFoundException('대상 부서를 찾을 수 없습니다.');
 
-    // 🌟 수정: jobPosition, jobTitle 대신 jobLevel, jobRole 조회
     const currentEmployees = await tx.employee.findMany({
       where: { id: { in: memberIds } },
-      select: { id: true, jobLevel: true, jobRole: true },
+      select: { id: true, jobPosition: true, jobTitle: true },
     });
 
-    // 🌟 수정: 이력(History) 테이블 생성 시 jobLevel, jobRole 매핑
+    // 3. [중요!] 사원 본체(employee) 테이블 업데이트는 생략합니다. 🛡️
+    // 일배치가 이 applyDate를 보고 나중에 처리할 거예요.
+
+    // 4. 이력(History) 테이블 기록 생성
     await tx.employeeOrganizationHistory.createMany({
-      data: currentEmployees.map((emp: any) => ({
+      data: currentEmployees.map((emp) => ({
         employeeId: emp.id,
         departmentId: targetDept.parentId ?? targetDeptId,
         teamId: targetDeptId,
-        jobLevel: emp.jobLevel,
-        jobRole: emp.jobRole,
+        jobPosition: emp.jobPosition,
+        jobTitle: emp.jobTitle,
         applyDate: applyDate,
         memo: '조직 개편/폐지에 따른 자동 이동 예약',
       })),
