@@ -15,8 +15,9 @@ export class EmployeeDetailResponseDto {
     gender: string;
     departmentId: number | null;
     teamId: number | null;
-    jobLevel: string | null;
+    jobPosition: string | null;
     jobRole: string | null;
+    jobTitle: string | null;
     assignStatus: string | null;
     email: string | null;
     joinDate: Date;

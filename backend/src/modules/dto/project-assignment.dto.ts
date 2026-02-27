@@ -1,12 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested, IsInt } from 'class-validator';
 import { ProjectAssignmentPeriodDto } from './project-assignment-period.dto';
 import { Type } from 'class-transformer';
+
+// export class ProjectAssignmentDto {
+//   @IsString() projectId: string; // 연결할 프로젝트 ID
+//   @IsDate() @Type(() => Date) startDate: Date;
+//   @IsDate() @IsOptional() @Type(() => Date) endDate?: Date;
+//   @IsString() @IsOptional() assignedRole?: string;
+//   @IsString() @IsOptional() tools?: string;
+//   @IsString() @IsOptional() workDetail?: string;
+//   @IsString() @IsOptional() contribution?: string;
+// }
 
 /**
  * 2. 부모 DTO
  */
 export class ProjectAssignmentDto {
+  @ApiProperty({ example: 'hg.jeong', description: '직원 ID' })
+  @IsOptional()
+  @IsInt()
+  projectId: number;
+
   @ApiProperty({ example: 'hg.jeong', description: '직원 ID' })
   @IsOptional()
   @IsString()
@@ -26,6 +41,18 @@ export class ProjectAssignmentDto {
   @IsOptional()
   @IsString()
   assignedRole?: string;
+
+  @IsString()
+  @IsOptional()
+  tools?: string;
+
+  @IsString()
+  @IsOptional()
+  workDetail?: string;
+
+  @IsString()
+  @IsOptional()
+  contribution?: string;
 
   @ApiProperty({
     description: '인력별 상세 투입 기간 리스트',

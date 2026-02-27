@@ -8,10 +8,13 @@ export class EmployeeResponseDto {
   nameKr: string;
 
   @ApiProperty({ description: '직급' })
-  level: string;
+  position: string;
 
-  @ApiProperty({ description: '역할' })
+  @ApiProperty({ description: '직무' })
   role: string;
+
+  @ApiProperty({ description: '직책' })
+  title: string;
 
   @ApiProperty({ description: '부서명' })
   departmentName: string;

@@ -1,6 +1,7 @@
 import { IsString, IsOptional, IsArray, IsDate, ValidateNested, IsInt, IsEmail, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ProjectAssignmentDto } from '../../dto/project-assignment.dto';
 
 // --- 내부 DTO 클래스들 ---
 
@@ -12,10 +13,10 @@ export class TechnicalAbilityDto {
 }
 
 export class CertificateDto {
-  @IsOptional() id?: number; 
-  
+  @IsOptional() id?: number;
+
   @IsString() name: string;
-  
+
   @IsString() type: string;
 
   // ✅ 변경된 부분: Type 변환기 추가 및 IsDate로 변경
@@ -32,15 +33,15 @@ export class CertificateDto {
   @IsString() issuingAuthority: string;
 }
 
-export class ProjectAssignmentDto {
-  @IsString() projectId: string; // 연결할 프로젝트 ID
-  @IsDate() @Type(() => Date) startDate: Date;
-  @IsDate() @IsOptional() @Type(() => Date) endDate?: Date;
-  @IsString() @IsOptional() assignedRole?: string;
-  @IsString() @IsOptional() tools?: string;
-  @IsString() @IsOptional() workDetail?: string;
-  @IsString() @IsOptional() contribution?: string;
-}
+// export class ProjectAssignmentDto {
+//   @IsString() projectId: string; // 연결할 프로젝트 ID
+//   @IsDate() @Type(() => Date) startDate: Date;
+//   @IsDate() @IsOptional() @Type(() => Date) endDate?: Date;
+//   @IsString() @IsOptional() assignedRole?: string;
+//   @IsString() @IsOptional() tools?: string;
+//   @IsString() @IsOptional() workDetail?: string;
+//   @IsString() @IsOptional() contribution?: string;
+// }
 
 export class UpdateEmployeeDto {
   // 1. 사원 기본 정보 (Employee)
@@ -86,9 +87,14 @@ export class UpdateEmployeeDto {
   @ApiProperty({ description: '직급', example: '과장' })
   @IsString()
   @IsOptional()
-  jobLevel?: string;
+  jobPosition?: string;
 
   @ApiProperty({ description: '직책', example: '팀장, 실장,' })
+  @IsString()
+  @IsOptional()
+  jobTitle?: string;
+
+  @ApiProperty({ description: '직무', example: '개발자, 테스터, 경영지원' })
   @IsString()
   @IsOptional()
   jobRole?: string;

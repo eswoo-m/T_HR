@@ -4,7 +4,8 @@ export class MonthlyMmListResponseDto {
   deptName: string;
   teamName: string;
   jobTitle: string;
-  jobLevel: string;
+  jobRole: string;
+  jobPosition: string;
 
   assignments: {
     projectName: string;

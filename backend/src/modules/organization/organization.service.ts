@@ -216,10 +216,9 @@ export class OrganizationService {
     const allOrgs = await this.prisma.organization.findMany({
       include: {
         parent: true,
-        // 1. 현재 인원이 아닌, 조직 변경 히스토리 테이블에서 가져옵니다 🛡️
         historiesAsTeam: {
           include: {
-            employee: true, // 상세 이름(nameKr)을 알기 위해 employee 테이블 조인 👥
+            employee: true,
           },
         },
         projects: {
@@ -259,7 +258,7 @@ export class OrganizationService {
 
           members: targetHistory.map((h) => ({
             name: h.employee.nameKr,
-            position: h.jobRole || h.jobLevel || '팀원',
+            position: h.jobPosition || h.jobTitle || '팀원',
           })),
         };
       };
@@ -453,7 +452,7 @@ export class OrganizationService {
 
     const currentEmployees = await tx.employee.findMany({
       where: { id: { in: memberIds } },
-      select: { id: true, jobLevel: true, jobRole: true },
+      select: { id: true, jobPosition: true, jobTitle: true },
     });
 
     // 3. [중요!] 사원 본체(employee) 테이블 업데이트는 생략합니다. 🛡️
@@ -465,8 +464,8 @@ export class OrganizationService {
         employeeId: emp.id,
         departmentId: targetDept.parentId ?? targetDeptId,
         teamId: targetDeptId,
-        jobLevel: emp.jobLevel,
-        jobRole: emp.jobRole,
+        jobPosition: emp.jobPosition,
+        jobTitle: emp.jobTitle,
         applyDate: applyDate,
         memo: '조직 개편/폐지에 따른 자동 이동 예약',
       })),

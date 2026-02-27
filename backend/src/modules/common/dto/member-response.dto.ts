@@ -8,8 +8,8 @@ export class MemberResponseDto {
   @ApiProperty({ example: '홍길동', description: '이름' })
   name: string;
 
-  @ApiProperty({ example: '부장', description: '직급' })
-  jobRole: string;
+  @ApiProperty({ example: '책임', description: '직급' })
+  jobTitle: string;
 
   @ApiProperty({ example: 'STE본부', description: '상위 부서명' })
   parentName: string;

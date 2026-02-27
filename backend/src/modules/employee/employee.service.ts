@@ -11,6 +11,8 @@ import { getErrorMessage } from '@common/utils/error.util';
 import { saveProfileImage } from '@common/utils/file-upload.util';
 import * as bcrypt from 'bcrypt';
 
+import { ProjectAssignmentDto } from '../dto/project-assignment.dto';
+
 // Prisma 타입 정의 (Relation 포함)
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   include: {
@@ -59,11 +61,11 @@ export class EmployeeService {
     }
 
     // 📸 사진 업로드 처리 로직
-    let savedProfilePath = dto.profilePath; 
+    let savedProfilePath = dto.profilePath;
     if (dto.profileImageBase64) {
       const uploadedPath = saveProfileImage(dto.profileImageBase64, dto.no);
       if (uploadedPath) {
-        savedProfilePath = uploadedPath; 
+        savedProfilePath = uploadedPath;
       }
     }
 
@@ -86,8 +88,9 @@ export class EmployeeService {
             departmentId: dto.departmentId,
             teamId: dto.teamId,
             deptId: dto.deptId,
-            jobLevel: dto.jobLevel,
+            jobPosition: dto.jobPosition,
             jobRole: dto.jobRole,
+            jobTitle: dto.jobTitle,
             assignStatus: dto.assignStatus,
             authLevel: dto.authLevel,
             email: dto.email,
@@ -121,8 +124,9 @@ export class EmployeeService {
             employeeId: employee.id,
             departmentId: dto.departmentId,
             teamId: dto.teamId,
-            jobLevel: dto.jobLevel,
+            jobPosition: dto.jobPosition,
             jobRole: dto.jobRole,
+            jobTitle: dto.jobTitle,
             applyDate: new Date(TODAY),
           },
         });
@@ -134,7 +138,7 @@ export class EmployeeService {
               employeeId: employee.id,
               companyName: exp.companyName,
               department: exp.department,
-              jobLevel: exp.jobLevel,
+              jobPosition: exp.jobPosition,
               jobRole: exp.jobRole,
               relevance: exp.relevance,
               entranceDate: new Date(exp.entranceDate),
@@ -159,12 +163,12 @@ export class EmployeeService {
             });
 
             if (cert.attachmentPaths && cert.attachmentPaths.length > 0) {
-              const path = cert.attachmentPaths[0]; 
+              const path = cert.attachmentPaths[0];
               await tx.attachment.create({
                 data: {
-                  employeeId: employee.id, 
-                  uploaderId: employee.id, 
-                  certificateId: newCert.id, 
+                  employeeId: employee.id,
+                  uploaderId: employee.id,
+                  certificateId: newCert.id,
                   fileType: 'CERTIFICATE',
                   filePath: path,
                   fileName: path.split('/').pop() || 'cert_file',
@@ -208,63 +212,60 @@ export class EmployeeService {
         where: {
           assignStatus: assignStatus || undefined,
           employeeDetail: skillLevel ? { is: { skillLevel } } : undefined,
-          OR: searchKeyword ? [
-            { nameKr: { contains: searchKeyword } },
-            { no: { contains: searchKeyword } },
-            { nameEn: { contains: searchKeyword } }
-          ] : undefined,
+          OR: searchKeyword ? [{ nameKr: { contains: searchKeyword } }, { no: { contains: searchKeyword } }, { nameEn: { contains: searchKeyword } }] : undefined,
           ...(departmentId && { departmentId }),
           ...(teamId && { teamId }),
         },
         include: {
-          employeeDetail: true, 
+          employeeDetail: true,
           previousExperiences: true,
-          certificates: true, // 🌟 핵심 수정: 기존 _count 대신 실제 자격증 객체 배열을 가져옵니다.
+          certificates: true,
           department: true,
           team: true,
-          employeeTool: true, 
+          employeeTool: true,
         },
-        orderBy: { no: 'asc' } 
+        orderBy: { no: 'asc' },
       });
 
       const list = employees.map((emp) => {
         let finalCareerYear = 0;
-        
+
         if (emp.employeeDetail?.totalSwExperience) {
-           finalCareerYear = emp.employeeDetail.totalSwExperience;
+          finalCareerYear = emp.employeeDetail.totalSwExperience;
         } else if (emp.joinDate) {
-           const join = new Date(emp.joinDate);
-           const now = new Date();
-           const diffTime = Math.abs(now.getTime() - join.getTime());
-           const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365); 
-           finalCareerYear = parseFloat(diffYears.toFixed(1));
+          const join = new Date(emp.joinDate);
+          const now = new Date();
+          const diffTime = Math.abs(now.getTime() - join.getTime());
+          const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365);
+          finalCareerYear = parseFloat(diffYears.toFixed(1));
         } else {
-           const calcTotalMonths = calculateTotalCareerMonths(emp.previousExperiences);
-           finalCareerYear = Math.floor(calcTotalMonths / 12);
+          const calcTotalMonths = calculateTotalCareerMonths(emp.previousExperiences);
+          finalCareerYear = Math.floor(calcTotalMonths / 12);
         }
 
         const targetOrgId = emp.teamId ?? emp.departmentId;
         const targetOrgName = emp.team?.name ?? emp.department?.name ?? '미배정';
 
         return {
-          id: emp.id,          
-          no: emp.no,          
-          name: emp.nameKr,    
-          departmentId: targetOrgId,   
-          department: targetOrgName,   
+          id: emp.id,
+          no: emp.no,
+          name: emp.nameKr,
+          departmentId: targetOrgId,
+          department: targetOrgName,
           deptId: emp.departmentId,
           teamId: emp.teamId,
-          jobLevel: emp.jobLevel, 
-          jobRole: emp.jobRole,   
-          assignStatus: emp.assignStatus, 
+          jobPosition: emp.jobPosition,
+          jobRole: emp.jobRole,
+          jobTitle: emp.jobTitle,
+          assignStatus: emp.assignStatus,
           skillLevel: emp.employeeDetail?.skillLevel || '초급',
           certificates: emp.certificates || [], // 🌟 반환 객체에 자격증 데이터 추가
           count: emp.certificates?.length ?? 0, // 🌟 개수는 배열 길이로 대체
           totalCareerYear: finalCareerYear,
-          joinDate: emp.joinDate, 
+          joinDate: emp.joinDate,
           email: emp.email,
           phone: emp.phone,
-          employeeTool: emp.employeeTool || null, 
+          employeeTool: emp.employeeTool || null,
         };
       });
 
@@ -311,16 +312,9 @@ export class EmployeeService {
   // =======================================================================
   // 4. 정보 수정 (Update)
   // =======================================================================
-  async update(id: string, dto: UpdateEmployeeDto | any) {
+  async update(id: string, dto: UpdateEmployeeDto) {
     return this.prisma.$transaction(async (tx) => {
-      const {
-        techStack, 
-        communicationTool,
-        apiTool,
-        otherTool,
-        technicalAbility,
-        ...basicDto
-      } = dto;
+      const { techStack, communicationTool, apiTool, otherTool, technicalAbility, projects, ...basicDto } = dto;
 
       // 4-1. 사원 기본 정보 수정
       await tx.employee.update({
@@ -328,11 +322,12 @@ export class EmployeeService {
         data: {
           nameEn: basicDto.nameEn,
           nameCh: basicDto.nameCh,
-          departmentId: basicDto.departmentId,
-          teamId: basicDto.teamId,
-          deptId: basicDto.deptId,
-          jobLevel: basicDto.jobLevel,
+          departmentId: basicDto.departmentId ? Number(basicDto.departmentId) : undefined,
+          teamId: basicDto.teamId ? Number(basicDto.teamId) : undefined,
+          deptId: basicDto.deptId ? Number(basicDto.deptId) : undefined,
+          jobPosition: basicDto.jobPosition,
           jobRole: basicDto.jobRole,
+          jobTitle: basicDto.jobTitle,
           assignStatus: basicDto.assignStatus,
           authLevel: basicDto.authLevel,
           email: basicDto.email,
@@ -399,9 +394,7 @@ export class EmployeeService {
 
       // 4-5. 자격증 동기화
       if (basicDto.certificates) {
-        const validCertIds = basicDto.certificates
-          .map((c: any) => c.id)
-          .filter((id: any) => typeof id === 'number');
+        const validCertIds = basicDto.certificates.map((c: any) => c.id).filter((id: any) => typeof id === 'number');
 
         await tx.certificate.deleteMany({
           where: {
@@ -439,14 +432,13 @@ export class EmployeeService {
 
       // 4-6. 프로젝트 투입 이력
       await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
-      if (basicDto.projects && basicDto.projects.length > 0) {
-        const projects = basicDto.projects;
+      if (projects && projects.length > 0) {
         await tx.projectAssignment.createMany({
-          data: projects.map((proj: any) => ({
+          data: projects.map((proj: ProjectAssignmentDto) => ({
             employeeId: id,
             projectId: Number(proj.projectId),
-            startDate: proj.startDate,
-            endDate: proj.endDate ?? null,
+            startDate: proj.startDate ? new Date(proj.startDate) : new Date(),
+            endDate: proj.endDate ? new Date(proj.endDate) : null,
             assignedRole: proj.assignedRole ?? null,
             tools: proj.tools ?? null,
             workDetail: proj.workDetail ?? null,
@@ -476,7 +468,7 @@ export class EmployeeService {
     return `${startYear} ~ ${endYear}`;
   }
 
-  private mapToDetailDto(emp: EmployeeWithRelations): EmployeeDetailResponseDto | any {
+  private mapToDetailDto(emp: EmployeeWithRelations): EmployeeDetailResponseDto {
     if (!emp) throw new Error('Data mapping failed: Employee object is null');
 
     return {
@@ -492,8 +484,9 @@ export class EmployeeService {
         gender: emp.gender,
         departmentId: emp.departmentId,
         teamId: emp.teamId,
-        jobLevel: emp.jobLevel,
+        jobPosition: emp.jobPosition,
         jobRole: emp.jobRole,
+        jobTitle: emp.jobTitle,
         assignStatus: emp.assignStatus,
         email: emp.email,
         joinDate: new Date(emp.joinDate),
@@ -520,24 +513,27 @@ export class EmployeeService {
         experienceDisplay: `${Math.floor((emp.employeeDetail?.totalSwExperience || 0) / 12)}년`,
         remarks: emp.employeeDetail?.remarks || null,
         profileImage: emp.employeeDetail?.profilePath ?? null,
-        
-        previousExperiences: emp.previousExperiences?.map((exp) => ({
-          id: exp.id,
-          companyName: exp.companyName,
-          department: exp.department,
-          jobLevel: exp.jobLevel,
-          jobRole: exp.jobRole,
-          entranceDate: exp.entranceDate,
-          resignationDate: exp.resignationDate,
-          assignedTask: exp.assignedTask,
-          relevance: exp.relevance,
-        })) ?? [],
-        
+
+        previousExperiences:
+          emp.previousExperiences.map((exp) =>
+            JSON.stringify({
+              id: exp.id,
+              companyName: exp.companyName,
+              department: exp.department,
+              jobLevel: exp.jobLevel,
+              jobRole: exp.jobRole,
+              entranceDate: exp.entranceDate,
+              resignationDate: exp.resignationDate,
+              assignedTask: exp.assignedTask,
+              relevance: exp.relevance,
+            }),
+          ) ?? [],
+
         assetsList: emp.assets?.map((assets) => `${assets.name} (${assets.typeId})`) ?? [],
       },
       skillsInfo: {
         certificates: emp.certificates.map((cert) => ({
-          id: cert.id, 
+          id: cert.id,
           name: cert.name,
           type: cert.type,
           acquisitionDate: cert.acquisitionDate,
