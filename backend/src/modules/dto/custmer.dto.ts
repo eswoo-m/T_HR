@@ -12,7 +12,7 @@ export class CustmerDto {
   @IsOptional()
   name: string;
 
-  @ApiProperty({ example: '1234-5678-90', description: '사업자등록번호' , required: false})
+  @ApiProperty({ example: '1234-5678-90', description: '사업자등록번호', required: false})
   @IsString()
   @IsOptional()
   businessNo: string;

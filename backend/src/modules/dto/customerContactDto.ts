@@ -5,7 +5,7 @@ import { ProjectContactDto } from './project-contact.dto';
 export class CustomerContactDto {
   @ApiProperty({ example: 101, required: false })
   @IsOptional()
-  @IsNumber() // 💡 데코레이터가 있어야 파싱됩니다!
+  @IsNumber()
   id?: number;
 
   @ApiProperty({ example: '홍길동', description: '담당자 이름' })

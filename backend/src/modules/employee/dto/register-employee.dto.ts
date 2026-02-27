@@ -14,7 +14,7 @@ export class PreProjectAssignmentDto {
 
   @ApiProperty({ description: '최종 직급', example: '과장' })
   @IsString()
-  jobLevel: string;
+  jobPosition: string;
 
   @ApiProperty({ description: '담당업무', example: '프론트 개발자' })
   @IsString()
@@ -157,9 +157,14 @@ export class RegisterEmployeeDto {
   @ApiProperty({ description: '직급', example: '과장' })
   @IsString()
   @IsOptional()
-  jobLevel?: string;
+  jobPosition?: string;
 
   @ApiProperty({ description: '직책', example: '팀장' })
+  @IsString()
+  @IsOptional()
+  jobTitle?: string;
+
+  @ApiProperty({ description: '직무', example: '테스터, 개발자' })
   @IsString()
   @IsOptional()
   jobRole?: string;
@@ -214,7 +219,7 @@ export class RegisterEmployeeDto {
   @ApiProperty({ description: '결혼 상태 코드 (CommonCode)', example: 'SINGLE' })
   @IsOptional()
   maritalStatus?: string;
-  
+
   // 📆 [추가] 결혼기념일 필드 (서비스 로직에 weddingAnniv 매핑이 있어 추가 필요)
   @ApiPropertyOptional({ description: '결혼기념일 (YYYY-MM-DD)', example: '2020-05-20' })
   @IsDateString()

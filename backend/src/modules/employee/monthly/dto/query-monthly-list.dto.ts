@@ -10,25 +10,33 @@ export class QueryMonthlyListDto {
 
   @ApiPropertyOptional({ description: '실(department) ID' })
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
-  departmentId?: number;
+  departmentId?: string;
 
   @ApiPropertyOptional({ description: '팀(Team) ID' })
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
-  teamId?: number;
+  teamId?: string;
 
   @ApiPropertyOptional({ description: '이름 또는 사번 검색' })
   @IsOptional()
   @IsString()
   searchKeyword?: string;
 
-  @ApiPropertyOptional({ description: '직급 ID' })
+  @ApiPropertyOptional({ description: '직급' })
   @IsOptional()
   @IsString()
-  jobLevel?: string;
+  jobPosition?: string;
+
+  @ApiPropertyOptional({ description: '직책' })
+  @IsOptional()
+  @IsString()
+  jobTitle?: string;
+
+  @ApiPropertyOptional({ description: '직무' })
+  @IsOptional()
+  @IsString()
+  jobRole?: string;
 
   @ApiPropertyOptional({ description: '투입 상태 (투입_정산, 대기 등)' })
   @IsOptional()

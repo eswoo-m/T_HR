@@ -7,7 +7,7 @@ export class EmployeeMonthlyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async query(query: QueryMonthlyListDto) {
-    const { yearMonth, searchKeyword, departmentId, teamId, assignStatus, jobLevel } = query;
+    const { yearMonth, searchKeyword, departmentId, teamId, assignStatus, jobPosition } = query;
 
     // 투입_정산, 투입_지원, 대기, 관리 카테고리 조회
     const categories = await this.prisma.commonCode.findMany({
@@ -24,7 +24,7 @@ export class EmployeeMonthlyService {
         yearMonth: yearMonth,
         employee: {
           assignStatus: assignStatus || undefined,
-          jobLevel: jobLevel || undefined,
+          jobPosition: jobPosition || undefined,
           OR: searchKeyword ? [{ nameKr: { contains: searchKeyword } }, { no: { contains: searchKeyword } }] : undefined,
           departmentId: departmentId ? Number(departmentId) : undefined,
           teamId: teamId ? Number(teamId) : undefined,
@@ -77,8 +77,8 @@ export class EmployeeMonthlyService {
           code: emp.id,
           department: emp.department?.name ?? '-',
           team: emp.team?.name ?? '-',
-          rank: emp.jobLevel ?? '-',
-          role: emp.jobRole ?? '-',
+          position: emp.jobPosition ?? '-',
+          title: emp.jobTitle ?? '-',
           ...projectColumns,
           totalMm: parseFloat(totalMm.toFixed(2)),
           effortRate: `${Math.round(totalMm * 100)}%`,

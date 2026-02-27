@@ -5,11 +5,12 @@ import { EmployeeMonthlyService } from './monthly/employee-monthly.service';
 import { EmployeeMonthlyController } from './monthly/employee-monthly.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthModule } from '../../auth/auth.module';
+import { EmployeeBatchService } from '../../batch/employeeBatchService';
 
 @Module({
   imports: [PrismaModule, AuthModule], // 필요한 경우 공통 모듈(예: PrismaModule) 임포트
   controllers: [EmployeeController, EmployeeMonthlyController],
-  providers: [EmployeeService, EmployeeMonthlyService],
+  providers: [EmployeeService, EmployeeMonthlyService/*, EmployeeBatchService*/],
   exports: [EmployeeService, EmployeeMonthlyService],
 })
 export class EmployeeModule {}

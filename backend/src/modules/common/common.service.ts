@@ -246,8 +246,9 @@ export class CommonService {
       select: {
         id: true,
         nameKr: true,
-        jobLevel: true,
+        jobPosition: true,
         jobRole: true,
+        jobTitle: true,
         department: {
           select: { name: true },
         },
@@ -263,7 +264,7 @@ export class CommonService {
     return members.map((m) => ({
       id: m.id,
       name: m.nameKr,
-      jobRole: m.jobRole ? `${m.jobLevel}(${m.jobRole})` : m.jobLevel || '사원',
+      jobTitle: m.jobTitle ? `${m.jobPosition}(${m.jobTitle})` : m.jobPosition || '사원',
       parentName: m.department?.name || '',
       teamName: m.team?.name || '',
     }));

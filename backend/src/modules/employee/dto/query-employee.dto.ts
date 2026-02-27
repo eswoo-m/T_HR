@@ -30,7 +30,17 @@ export class QueryEmployeeDto {
   @ApiPropertyOptional({ description: '직급' })
   @IsOptional()
   @IsString()
-  jobLevel?: string;
+  jobPosition?: string;
+
+  @ApiPropertyOptional({ description: '직책' })
+  @IsOptional()
+  @IsString()
+  jobTitle?: string;
+
+  @ApiPropertyOptional({ description: '직무' })
+  @IsOptional()
+  @IsString()
+  jobRole?: string;
 
   @ApiPropertyOptional({ description: '기술 레벨 (초급, 중급, 고급, 특급)' })
   @IsOptional()
