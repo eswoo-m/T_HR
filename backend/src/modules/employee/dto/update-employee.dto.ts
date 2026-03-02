@@ -78,9 +78,14 @@ export class UpdateEmployeeDto {
   @ApiProperty({ description: '직급', example: '과장' })
   @IsString()
   @IsOptional()
-  jobLevel?: string;
+  jobPosition?: string;
 
-  @ApiProperty({ description: '직무/직책', example: '개발자, 테스터, 경영지원, 팀장' })
+  @ApiProperty({ description: '직책', example: '파트장, 팀장, 실장,' })
+  @IsString()
+  @IsOptional()
+  jobTitle?: string;
+
+  @ApiProperty({ description: '직무', example: '테스터, 개발자, 경영지원' })
   @IsString()
   @IsOptional()
   jobRole?: string;

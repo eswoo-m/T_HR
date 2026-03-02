@@ -58,3 +58,13 @@ export const toSafeDate = (date: Date | string): Date => {
 export const subtractDaysSafe = (date: Date | string, days: number = 1): Date => {
   return dayjs(date).subtract(days, 'day').hour(12).toDate();
 };
+
+export const calculateCurrentServiceMonths = (joinDate: Date | string | null | undefined): number => {
+  if (!joinDate) return 0;
+
+  const start = dayjs(joinDate);
+  const now = dayjs();
+
+  const diff = now.diff(start, 'month');
+  return diff > 0 ? diff : 0;
+};

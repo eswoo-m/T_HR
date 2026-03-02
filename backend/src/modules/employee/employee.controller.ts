@@ -39,26 +39,7 @@ export class EmployeeController {
   @ApiResponse({ status: 400, description: '잘못된 요청 (파라미터 오류 등)' })
   @ApiResponse({ status: 500, description: '서버 내부 오류 (DB 연결 실패 등)' })
   async query(@Query() dto: QueryEmployeeDto) {
-  
-    // 1. 서비스 호출
-    const result = await this.employeeService.query(dto);
-
-    // 2. 🔥 [디버깅 로그] 서비스가 리턴한 결과 중 '테스트4' 데이터 확인
-    if (Array.isArray(result)) {
-        const target = result.find((item: any) => item.name === '테스트4' || item.nameKr === '테스트4') || result[0];
-        if (target) {
-            console.log("---------------------------------------------------");
-            console.log(`🎯 [Controller] 최종 응답 데이터 확인 (대상: ${target.name})`);
-            console.log(`   - totalCareerYear (총 경력): ${target.totalCareerYear}`);
-            console.log(`   - skillLevel (기술 등급): ${target.skillLevel}`);
-            console.log("---------------------------------------------------");
-        } else {
-            console.log("⚠️ [Controller] 데이터가 없거나 대상을 찾을 수 없습니다.");
-        }
-    }
-
-    // 3. 결과 리턴
-    return result;
+    return await this.employeeService.query(dto);
   }
 
   @Get(':id')
@@ -67,23 +48,7 @@ export class EmployeeController {
   @ApiResponse({ status: 200, type: EmployeeDetailResponseDto })
   @ApiResponse({ status: 404, description: '사원을 찾을 수 없음' })
   async get(@Param('id') id: string) {
-    console.log(`🔥 [Controller] 상세 조회 요청 받음 (ID: ${id})`);
-    
-    const result = await this.employeeService.get(id);
-
-    // ✅ [디버깅 로그] 상세 조회 결과 확인
-    if (result && result.basicInfo) {
-        console.log("---------------------------------------------------");
-        console.log(`🔍 [Controller: 상세 조회] 데이터 확인 (ID: ${id})`);
-        console.log(`   - 이름: ${result.basicInfo.nameKr}`);
-        console.log(`   - totalSwExperience (상세 경력): ${result.basicInfo.totalSwExperience}`);
-        console.log(`   - skillLevel (상세 등급): ${result.basicInfo.skillLevel}`);
-        console.log("---------------------------------------------------");
-    } else {
-        console.log(`⚠️ [Controller] 상세 조회 데이터가 없습니다. (ID: ${id})`);
-    }
-
-    return result;
+    return await this.employeeService.get(id);
   }
 
   @Patch(':id')

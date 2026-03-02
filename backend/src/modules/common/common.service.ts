@@ -99,6 +99,8 @@ export class CommonService {
               id: true,
               nameKr: true,
               jobRole: true,
+              jobPosition: true,
+              jobTitle: true,
               deptId: true,
             },
           })
@@ -133,7 +135,9 @@ export class CommonService {
             ? (empMap.get(String(org.id)) ?? []).map((emp) => ({
                 id: emp.id,
                 name: emp.nameKr,
-                jobRole: emp.jobRole ?? '',
+              jobRole: emp.jobRole ?? '',
+              jobPosition: emp.jobPosition ?? '',
+              jobTitle: emp.jobTitle ?? '',
                 department: org.name ?? '',
               }))
             : undefined,
@@ -207,9 +211,9 @@ export class CommonService {
       select: {
         id: true,
         nameKr: true,
-        jobPosition: true, // jobLevel 대신 실존하는 jobPosition 사용
-        jobTitle: true,    // 기존 스키마에 존재함
-        jobRole: true,     // 기존 스키마에 존재함
+        jobPosition: true,
+        jobRole: true,
+        jobTitle: true,
         department: { select: { name: true } },
         team: { select: { name: true } },
       },
@@ -219,9 +223,7 @@ export class CommonService {
     return members.map((m) => ({
       id: m.id,
       name: m.nameKr,
-      // 기존 기능: jobLevel(jobRole) 형태의 문자열 조합 유지
-      // jobLevel 대신 jobPosition을 사용하여 에러 해결
-      jobTitle: m.jobRole ? `${m.jobPosition || '사원'}(${m.jobRole})` : m.jobPosition || '사원',
+      jobTitle: m.jobTitle ? `${m.jobPosition}(${m.jobTitle})` : m.jobPosition || '사원',
       parentName: m.department?.name || '',
       teamName: m.team?.name || '',
     }));

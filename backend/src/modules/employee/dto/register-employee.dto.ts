@@ -12,10 +12,9 @@ export class PreProjectAssignmentDto {
   @IsString()
   department: string;
 
-  // 🌟 변경됨: jobPosition -> jobLevel
   @ApiProperty({ description: '최종 직급', example: '과장' })
   @IsString()
-  jobLevel: string;
+  jobPosition: string;
 
   @ApiProperty({ description: '담당업무', example: '프론트 개발자' })
   @IsString()
@@ -155,13 +154,17 @@ export class RegisterEmployeeDto {
   @IsOptional()
   authLevel?: string;
 
-  // 🌟 변경됨: jobPosition과 jobTitle을 합쳐서 jobLevel 하나로 만듦
   @ApiProperty({ description: '직급', example: '과장' })
   @IsString()
   @IsOptional()
-  jobLevel?: string;
+  jobPosition?: string;
 
-  @ApiProperty({ description: '직무/직책', example: '테스터, 개발자, 팀장' })
+  @ApiProperty({ description: '직책', example: '파트장, 팀장, 실장' })
+  @IsString()
+  @IsOptional()
+  jobTitle?: string;
+
+  @ApiProperty({ description: '직무', example: '테스터, 개발자, 경영지원' })
   @IsString()
   @IsOptional()
   jobRole?: string;

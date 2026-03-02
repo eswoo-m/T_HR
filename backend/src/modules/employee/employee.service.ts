@@ -1,13 +1,15 @@
 import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { getKstDate, calculateTotalCareerMonths } from '@common/utils/date.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterEmployeeDto } from './dto/register-employee.dto';
 import { QueryEmployeeDto, CareerRange } from './dto/query-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
+
 import { getErrorMessage } from '@common/utils/error.util';
 import { saveProfileImage } from '@common/utils/file-upload.util';
+import { getKstDate, calculateTotalCareerMonths, calculateCurrentServiceMonths } from '@common/utils/date.util';
+
 import * as bcrypt from 'bcrypt';
 
 import { ProjectAssignmentDto } from '../dto/project-assignment.dto';
@@ -85,8 +87,8 @@ export class EmployeeService {
             departmentId: dto.departmentId,
             teamId: dto.teamId,
             deptId: dto.deptId,
-            // ✅ 수정: jobLevel -> jobPosition
-            jobPosition: dto.jobLevel, 
+            jobPosition: dto.jobPosition,
+            jobTitle: dto.jobTitle,
             jobRole: dto.jobRole,
             assignStatus: dto.assignStatus,
             authLevel: dto.authLevel,
@@ -117,11 +119,11 @@ export class EmployeeService {
         await tx.employeeOrganizationHistory.create({
           data: {
             employeeId: employee.id,
-            departmentId: dto.departmentId || 0,
+            departmentId: dto.departmentId,
             teamId: dto.teamId,
-            // ✅ 수정: jobLevel -> jobPosition
-            jobPosition: dto.jobLevel, 
+            jobPosition: dto.jobPosition,
             jobRole: dto.jobRole,
+            jobTitle: dto.jobTitle,
             applyDate: new Date(TODAY),
           },
         });
@@ -132,8 +134,7 @@ export class EmployeeService {
               employeeId: employee.id,
               companyName: exp.companyName,
               department: exp.department,
-              // 💡 PreviousExperience 모델은 스키마에 jobLevel 필드가 있으므로 그대로 유지
-              jobLevel: exp.jobLevel, 
+              jobPosition: exp.jobPosition,
               jobRole: exp.jobRole,
               relevance: exp.relevance,
               entranceDate: new Date(exp.entranceDate),
@@ -221,43 +222,33 @@ export class EmployeeService {
       });
 
       const list = employees.map((emp) => {
-        let finalCareerYear = 0;
-
-        if (emp.employeeDetail?.totalSwExperience) {
-          finalCareerYear = emp.employeeDetail.totalSwExperience;
-        } else if (emp.joinDate) {
-          const join = new Date(emp.joinDate);
-          const now = new Date();
-          const diffTime = Math.abs(now.getTime() - join.getTime());
-          const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365);
-          finalCareerYear = parseFloat(diffYears.toFixed(1));
-        } else {
-          const calcTotalMonths = calculateTotalCareerMonths(emp.previousExperiences);
-          finalCareerYear = Math.floor(calcTotalMonths / 12);
-        }
-
-        const targetOrgId = emp.teamId ?? emp.departmentId;
-        const targetOrgName = emp.team?.name ?? emp.department?.name ?? '미배정';
+        const previousMonths = calculateTotalCareerMonths(emp.previousExperiences || []);
+        const currentMonths = calculateCurrentServiceMonths(emp.joinDate);
+        const totalSwExperience = previousMonths + currentMonths;
 
         return {
           id: emp.id,
           no: emp.no,
           name: emp.nameKr,
-          departmentId: targetOrgId,
-          department: targetOrgName,
-          deptId: emp.departmentId,
+          departmentId: emp.departmentId,
+          department: emp.department?.name,
+          deptId: emp.deptId,
           teamId: emp.teamId,
-          // ✅ 수정: jobPosition 값을 jobLevel 키로 반환 (프론트 엔드 호환성)
-          jobLevel: emp.jobPosition, 
+          team: emp.team?.name,
+          jobPosition: emp.jobPosition,
           jobRole: emp.jobRole,
+          jobTitle: emp.jobTitle,
           assignStatus: emp.assignStatus,
-          skillLevel: emp.employeeDetail?.skillLevel || '초급',
+          skillLevel: emp.employeeDetail?.skillLevel,
           certificates: emp.certificates || [],
           count: emp.certificates?.length ?? 0,
-          totalCareerYear: finalCareerYear,
+          totalCareerYear: totalSwExperience,
+          totalSwExperience: emp.employeeDetail?.totalSwExperience || 0,
           joinDate: emp.joinDate,
           email: emp.email,
           phone: emp.phone,
+          gender: emp.gender,
+          type: emp.employeeDetail?.type || null,
           employeeTool: emp.employeeTool || null,
         };
       });
@@ -299,7 +290,7 @@ export class EmployeeService {
 
     if (!employee) throw new NotFoundException();
 
-    return this.mapToDetailDto(employee as any as EmployeeWithRelations);
+    return this.mapToDetailDto(employee as EmployeeWithRelations);
   }
 
   // =======================================================================
@@ -312,18 +303,18 @@ export class EmployeeService {
       await tx.employee.update({
         where: { id },
         data: {
-          nameEn: basicDto.nameEn,
-          nameCh: basicDto.nameCh,
-          departmentId: basicDto.departmentId ? Number(basicDto.departmentId) : undefined,
-          teamId: basicDto.teamId ? Number(basicDto.teamId) : undefined,
-          deptId: basicDto.deptId ? Number(basicDto.deptId) : undefined,
-          // ✅ 수정: jobLevel -> jobPosition
-          jobPosition: basicDto.jobLevel, 
-          jobRole: basicDto.jobRole,
-          assignStatus: basicDto.assignStatus,
-          authLevel: basicDto.authLevel,
-          email: basicDto.email,
-          phone: basicDto.phone,
+          nameEn: dto.nameEn,
+          nameCh: dto.nameCh,
+          departmentId: dto.departmentId ? Number(basicDto.departmentId) : undefined,
+          teamId: dto.teamId ? Number(basicDto.teamId) : undefined,
+          deptId: dto.deptId ? Number(basicDto.deptId) : undefined,
+          jobPosition: dto.jobPosition,
+          jobRole: dto.jobRole,
+          jobTitle: dto.jobTitle,
+          assignStatus: dto.assignStatus,
+          authLevel: dto.authLevel,
+          email: dto.email,
+          phone: dto.phone,
         },
       });
 
@@ -462,9 +453,9 @@ export class EmployeeService {
         gender: emp.gender,
         departmentId: emp.departmentId,
         teamId: emp.teamId,
-        // ✅ 수정: jobPosition 사용
-        jobLevel: emp.jobPosition, 
+        jobPosition: emp.jobPosition,
         jobRole: emp.jobRole,
+        jobTitle: emp.jobTitle,
         assignStatus: emp.assignStatus,
         email: emp.email,
         joinDate: new Date(emp.joinDate),
@@ -492,20 +483,20 @@ export class EmployeeService {
         remarks: emp.employeeDetail?.remarks || null,
         profileImage: emp.employeeDetail?.profilePath ?? null,
 
-        previousExperiences: emp.previousExperiences.map((exp) =>
-          JSON.stringify({
-            id: exp.id,
-            companyName: exp.companyName,
-            department: exp.department,
-            // 💡 PreviousExperience는 스키마상 jobLevel이 있으므로 유지
-            jobLevel: exp.jobLevel, 
-            jobRole: exp.jobRole,
-            entranceDate: exp.entranceDate,
-            resignationDate: exp.resignationDate,
-            assignedTask: exp.assignedTask,
-            relevance: exp.relevance,
-          }),
-        ) ?? [],
+        previousExperiences:
+          emp.previousExperiences.map((exp) =>
+            JSON.stringify({
+              id: exp.id,
+              companyName: exp.companyName,
+              department: exp.department,
+              jobLevel: exp.jobLevel,
+              jobRole: exp.jobRole,
+              entranceDate: exp.entranceDate,
+              resignationDate: exp.resignationDate,
+              assignedTask: exp.assignedTask,
+              relevance: exp.relevance,
+            }),
+          ) ?? [],
 
         assetsList: emp.assets?.map((assets) => `${assets.name} (${assets.typeId})`) ?? [],
       },
