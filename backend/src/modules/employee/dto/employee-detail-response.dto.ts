@@ -60,11 +60,13 @@ export class EmployeeDetailResponseDto {
 
   // 3. 과거경력 탭
   @ApiProperty({ description: '과거 경력' })
-  preProject: {
+  prevProjects: {
+    id: number | null;
     projectName: string | null;
     customerName: string | null;
     startDate: Date | null;
     endDate: Date | null;
+    status?: string | null;
     headcount: number | null;
     taskName: string | null;
     taskSummary: string | null;
@@ -77,10 +79,14 @@ export class EmployeeDetailResponseDto {
   // 4. 프로젝트 경력 탭 (사내 수행 프로젝트)
   @ApiProperty({ description: '프로젝트 경력' })
   projects: {
+    id: number | null;
+    projectId: number | null;
     projectName: string | null;
     customerName: string | null;
     startDate: Date | null;
     endDate: Date | null;
+    status?: string | null;
+    location?: string | null;
     headcount: number | null;
     taskName: string | null;
     taskSummary: string | null;

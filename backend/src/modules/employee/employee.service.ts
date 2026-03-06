@@ -12,8 +12,6 @@ import { getKstDate, calculateTotalCareerMonths, calculateCurrentServiceMonths }
 
 import * as bcrypt from 'bcrypt';
 
-import { ProjectAssignmentDto } from '../dto/project-assignment.dto';
-
 // Prisma 타입 정의 (Relation 포함)
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   include: {
@@ -151,6 +149,7 @@ export class EmployeeService {
                 employeeId: employee.id,
                 type: cert.type,
                 name: cert.name,
+                number: cert.number,
                 issuingAuthority: cert.issuingAuthority,
                 acquisitionDate: new Date(cert.acquisitionDate),
                 expDate: cert.expDate ? new Date(cert.expDate) : null,
@@ -204,8 +203,14 @@ export class EmployeeService {
 
       const employees = await this.prisma.employee.findMany({
         where: {
+          exitDate: null,
           assignStatus: assignStatus || undefined,
-          employeeDetail: skillLevel ? { is: { skillLevel } } : undefined,
+          employeeDetail: {
+            is: {
+              hrStatus: 'EMPLOYED',
+              ...(skillLevel && { skillLevel }),
+            },
+          },
           OR: searchKeyword ? [{ nameKr: { contains: searchKeyword } }, { no: { contains: searchKeyword } }, { nameEn: { contains: searchKeyword } }] : undefined,
           ...(departmentId && { departmentId }),
           ...(teamId && { teamId }),
@@ -243,7 +248,8 @@ export class EmployeeService {
           certificates: emp.certificates || [],
           count: emp.certificates?.length ?? 0,
           totalCareerYear: totalSwExperience,
-          totalSwExperience: emp.employeeDetail?.totalSwExperience || 0,
+          prevSwExperience: emp.employeeDetail?.prevSwExperience || 0,
+          totalExperience: emp.employeeDetail?.totalSwExperience || 0,
           joinDate: emp.joinDate,
           email: emp.email,
           phone: emp.phone,
@@ -298,132 +304,162 @@ export class EmployeeService {
   // =======================================================================
   async update(id: string, dto: UpdateEmployeeDto) {
     return this.prisma.$transaction(async (tx) => {
-      const { techStack, communicationTool, apiTool, otherTool, technicalAbility, projects, ...basicDto } = dto;
+      const { basicInfo, skillsInfo, prevProjects, projects } = dto;
 
-      await tx.employee.update({
-        where: { id },
-        data: {
-          nameEn: dto.nameEn,
-          nameCh: dto.nameCh,
-          departmentId: dto.departmentId ? Number(basicDto.departmentId) : undefined,
-          teamId: dto.teamId ? Number(basicDto.teamId) : undefined,
-          deptId: dto.deptId ? Number(basicDto.deptId) : undefined,
-          jobPosition: dto.jobPosition,
-          jobRole: dto.jobRole,
-          jobTitle: dto.jobTitle,
-          assignStatus: dto.assignStatus,
-          authLevel: dto.authLevel,
-          email: dto.email,
-          phone: dto.phone,
-        },
-      });
+      // console.log('📦 수신 데이터(DTO):', JSON.stringify(dto, null, 2));
 
-      await tx.employeeDetail.update({
-        where: { employeeId: id },
-        data: {
-          type: basicDto.type,
-          hrStatus: basicDto.hrStatus,
-          eduLevel: basicDto.eduLevel,
-          lastSchool: basicDto.lastSchool,
-          major: basicDto.major,
-          maritalStatus: basicDto.maritalStatus,
-          zipCode: basicDto.zipCode,
-          address: basicDto.address,
-          addressDetail: basicDto.addressDetail,
-          profilePath: basicDto.profilePath,
-        },
-      });
-
-      if (technicalAbility) {
-        await tx.technicalAbility.upsert({
-          where: { employeeId: id },
-          update: {
-            communicationSkill: technicalAbility.communication,
-            officeSkill: technicalAbility.officeSkill,
-            testDesign: technicalAbility.testDesign,
-            testExecution: technicalAbility.testExecution,
+      if (basicInfo) {
+        await tx.employee.update({
+          where: { id },
+          data: {
+            nameEn: basicInfo.nameEn,
+            nameCh: basicInfo.nameCh,
+            departmentId: basicInfo.departmentId ? Number(basicInfo.departmentId) : undefined,
+            teamId: basicInfo.teamId ? Number(basicInfo.teamId) : undefined,
+            jobPosition: basicInfo.jobPosition,
+            jobRole: basicInfo.jobRole,
+            jobTitle: basicInfo.jobTitle,
+            assignStatus: basicInfo.assignStatus,
+            email: basicInfo.email,
+            phone: basicInfo.phone,
           },
-          create: {
-            employeeId: id,
-            communicationSkill: technicalAbility.communication,
-            officeSkill: technicalAbility.officeSkill,
-            testDesign: technicalAbility.testDesign,
-            testExecution: technicalAbility.testExecution,
+        });
+
+        await tx.employeeDetail.update({
+          where: { employeeId: id },
+          data: {
+            type: basicInfo.type,
+            hrStatus: basicInfo.hrStatus,
+            eduLevel: basicInfo.eduLevel ?? null,
+            lastSchool: basicInfo.lastSchool ?? null,
+            major: basicInfo.major ?? null,
+            entranceDate: basicInfo.entranceDate ? new Date(`${basicInfo.entranceDate.replace(/\./g, '-')}T12:00:00Z`) : null,
+            graduationDate: basicInfo.graduationDate ? new Date(`${basicInfo.graduationDate.replace(/\./g, '-')}T12:00:00Z`) : null,
+            maritalStatus: basicInfo.maritalStatus,
+            zipCode: basicInfo.zipCode,
+            address: basicInfo.address,
+            addressDetail: basicInfo.addressDetail,
+            profilePath: basicInfo.profileImage,
           },
         });
       }
 
-      if (techStack !== undefined || communicationTool !== undefined || apiTool !== undefined || otherTool !== undefined) {
-        await tx.employeeTool.upsert({
-          where: { employeeId: id },
-          update: {
-            defectSystem: techStack !== undefined ? techStack : undefined,
-            messenger: communicationTool !== undefined ? communicationTool : undefined,
-            apiTool: apiTool !== undefined ? apiTool : undefined,
-            etcTool: otherTool !== undefined ? otherTool : undefined,
-          },
-          create: {
-            employeeId: id,
-            defectSystem: techStack || '',
-            messenger: communicationTool || '',
-            apiTool: apiTool || '',
-            etcTool: otherTool || '',
-          },
-        });
+      // 2️⃣ [역량 정보 영역] (TechnicalAbility, EmployeeTool, Certificates)
+      if (skillsInfo) {
+        if (skillsInfo.technicalAbility) {
+          await tx.technicalAbility.upsert({
+            where: { employeeId: id },
+            update: {
+              communicationSkill: skillsInfo.technicalAbility.communication,
+              officeSkill: skillsInfo.technicalAbility.officeSkill,
+              testDesign: skillsInfo.technicalAbility.testDesign,
+              testExecution: skillsInfo.technicalAbility.testExecution,
+            },
+            create: {
+              employeeId: id,
+              communicationSkill: skillsInfo.technicalAbility.communication,
+              officeSkill: skillsInfo.technicalAbility.officeSkill,
+              testDesign: skillsInfo.technicalAbility.testDesign,
+              testExecution: skillsInfo.technicalAbility.testExecution,
+            },
+          });
+        }
+
+        // (2) 사용 도구 (Upsert)
+        if (skillsInfo.employeeTool) {
+          const { defectSystem, messenger, apiTool, etcTool } = skillsInfo.employeeTool;
+          const formattedTools = {
+            defectSystem: Array.isArray(defectSystem) ? defectSystem.join(',') : (defectSystem ?? ''),
+            messenger: Array.isArray(messenger) ? messenger.join(',') : (messenger ?? ''),
+            apiTool: Array.isArray(apiTool) ? apiTool.join(',') : (apiTool ?? ''),
+            etcTool: etcTool ?? '',
+          };
+
+          await tx.employeeTool.upsert({
+            where: { employeeId: id },
+            update: formattedTools,
+            create: {
+              employeeId: id,
+              ...formattedTools,
+            },
+          });
+        }
+
+        // (3) 자격증 처리 (기존꺼 유지/삭제 후 업데이트)
+        if (skillsInfo.certificates) {
+          const realCertIds = skillsInfo.certificates.map((c: any) => Number(c.id)).filter((cid: number) => cid < 1000000000); // 🚀 10억 미만인 것만 진짜 DB ID로 인정! ㅋ🥊
+
+          // 2. 리스트에 없는 (사용자가 삭제한) 기존 자격증들만 삭제 ㅋ✨
+          await tx.certificate.deleteMany({
+            where: {
+              employeeId: id,
+              id: { notIn: realCertIds },
+            },
+          });
+
+          // 3. 자격증 루프 돌며 처리 ㅋ🕺
+          for (const cert of skillsInfo.certificates) {
+            const certId = Number(cert.id);
+            const certData = {
+              type: cert.type || '취득',
+              name: cert.name || '',
+              number: cert.number || '',
+              issuingAuthority: cert.issuingAuthority || '',
+              acquisitionDate: cert.acquisitionDate ? new Date(cert.acquisitionDate) : new Date(),
+            };
+
+            if (certId && certId < 1000000000) {
+              await tx.certificate.update({
+                where: { id: certId },
+                data: certData,
+              });
+            } else {
+              await tx.certificate.create({
+                data: { ...certData, employeeId: id },
+              });
+            }
+          }
+        }
       }
 
-      if (basicDto.certificates) {
-        const validCertIds = basicDto.certificates.map((c: any) => c.id).filter((id: any) => typeof id === 'number');
+      // 3️⃣ [과거 경력 영역] (PreProjectAssignment)
+      if (prevProjects) {
+        await tx.preProjectAssignment.deleteMany({ where: { employeeId: id } });
+        if (prevProjects.length > 0) {
+          await tx.preProjectAssignment.createMany({
+            data: prevProjects.map((pp) => ({
+              employeeId: id,
+              projectName: pp.projectName,
+              customerName: pp.customerName || null,
+              startDate: pp.startDate ? new Date(pp.startDate) : new Date(),
+              endDate: pp.endDate ? new Date(pp.endDate) : null,
+              assignedRole: pp.assignedRole || null,
+              tools: pp.tools || null,
+              workDetail: pp.workDetail || null,
+              contribution: pp.contribution || null,
+            })),
+          });
+        }
+      }
 
-        await tx.certificate.deleteMany({
-          where: {
-            employeeId: id,
-            id: { notIn: validCertIds },
-          },
-        });
-
-        for (const cert of basicDto.certificates) {
-          if (cert.id && typeof cert.id === 'number') {
-            await tx.certificate.update({
-              where: { id: cert.id },
+      // 4️⃣ [프로젝트 경력 영역] (ProjectAssignment)
+      if (projects && projects.length > 0) {
+        for (const p of projects) {
+          if (p.id) {
+            await tx.projectAssignment.update({
+              where: { id: Number(p.id) },
               data: {
-                type: cert.type,
-                name: cert.name,
-                issuingAuthority: cert.issuingAuthority,
-                acquisitionDate: new Date(cert.acquisitionDate),
-                expDate: cert.expDate ? new Date(cert.expDate) : null,
-              },
-            });
-          } else {
-            await tx.certificate.create({
-              data: {
-                employeeId: id,
-                type: cert.type,
-                name: cert.name,
-                issuingAuthority: cert.issuingAuthority,
-                acquisitionDate: new Date(cert.acquisitionDate),
-                expDate: cert.expDate ? new Date(cert.expDate) : null,
+                assignedRole: p.assignedRole,
+                tools: p.tools,
+                workDetail: p.workDetail,
+                contribution: p.contribution,
               },
             });
           }
         }
       }
 
-      if (projects && projects.length > 0) {
-        await tx.projectAssignment.deleteMany({ where: { employeeId: id } });
-        await tx.projectAssignment.createMany({
-          data: projects.map((proj: ProjectAssignmentDto) => ({
-            employeeId: id,
-            projectId: Number(proj.projectId),
-            startDate: proj.startDate ? new Date(proj.startDate) : new Date(),
-            endDate: proj.endDate ? new Date(proj.endDate) : null,
-            assignedRole: proj.assignedRole ?? null,
-            tools: proj.tools ?? null,
-            workDetail: proj.workDetail ?? null,
-            contribution: proj.contribution ?? null,
-          })),
-        });
-      }
+      return { success: true, message: 'Employee updated successfully' };
     });
   }
 
@@ -471,7 +507,7 @@ export class EmployeeService {
         entranceDate: emp.employeeDetail?.entranceDate || null,
         graduationDate: emp.employeeDetail?.graduationDate || null,
         totalSwExperience: emp.employeeDetail?.totalSwExperience || null,
-        prevSwExperience: emp.employeeDetail?.totalSwExperience || null,
+        prevSwExperience: emp.employeeDetail?.prevSwExperience || null,
         maritalStatus: emp.employeeDetail?.maritalStatus || null,
         weddingAnniv: emp.employeeDetail?.weddingAnniv || null,
         emergencyPhone: emp.employeeDetail?.emergencyPhone || null,
@@ -505,8 +541,9 @@ export class EmployeeService {
           id: cert.id,
           name: cert.name,
           type: cert.type,
-          acquisitionDate: cert.acquisitionDate,
           issuingAuthority: cert.issuingAuthority,
+          acquisitionDate: cert.acquisitionDate,
+          displayDate: cert.acquisitionDate ? cert.acquisitionDate.toISOString().split('T')[0] : null,
         })),
         technicalAbility: {
           communication: (emp.technicalAbility?.communicationSkill as string) ?? null,
@@ -521,7 +558,8 @@ export class EmployeeService {
           etcTool: (emp.employeeTool?.etcTool as string) ?? null,
         },
       },
-      preProject: emp.preProjectAssignments.map((ppa) => ({
+      prevProjects: emp.preProjectAssignments.map((ppa) => ({
+        id: ppa.id,
         projectName: ppa.projectName,
         customerName: ppa.customerName,
         startDate: ppa.startDate,
@@ -535,10 +573,14 @@ export class EmployeeService {
         contribution: (ppa.contribution as string) ?? null,
       })),
       projects: emp.projectAssignments.map((pa) => ({
+        id: pa.id,
+        projectId: pa.projectId,
         projectName: pa.project?.name ?? null,
         customerName: pa.project?.customer?.name ?? null,
         startDate: pa.startDate,
         endDate: pa.endDate,
+        status: pa.project?.status ?? null,
+        location: pa.project?.location ?? null,
         headcount: pa.project?.headcount ?? 0,
         taskName: pa.project?.taskName ?? null,
         taskSummary: pa.project?.taskSummary ?? null,

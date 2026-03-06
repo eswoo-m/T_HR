@@ -2,10 +2,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
-generator erd {
-  provider = "prisma-erd-generator"
-  output   = "./ERD.pdf"
-}
+// 서버 빌드시 ERD 생성 불필
+// generator erd {
+//   provider = "prisma-erd-generator"
+//   output   = "./ERD.pdf"
+// }
 
 datasource db {
   provider = "postgresql"
@@ -212,7 +213,7 @@ model EmployeeMonthlyMm {
 model EmployeeOrganizationHistory {
   id           Int           @id @default(autoincrement())
   employeeId   String        @map("employee_id")
-  departmentId Int           @map("department_id")
+  departmentId Int?          @map("department_id")
   teamId       Int?          @map("team_id")
   jobPosition  String?       @map("job_position")
   jobTitle     String?       @map("job_title")
@@ -220,7 +221,7 @@ model EmployeeOrganizationHistory {
   applyDate    DateTime      @map("apply_date") @db.Date
   regTime      DateTime      @default(now()) @map("reg_time")
   memo         String?       @map("memo")
-  department   Organization  @relation("DepartmentRelation", fields: [departmentId], references: [id])
+  department   Organization? @relation("DepartmentRelation", fields: [departmentId], references: [id])
   employee     Employee      @relation(fields: [employeeId], references: [id])
   team         Organization? @relation("TeamRelation", fields: [teamId], references: [id])
 
@@ -390,11 +391,13 @@ model Certificate {
   id               Int          @id @default(autoincrement()) @map("id")
   employeeId       String       @map("employee_id")
   type             String       @map("cert_type")
+  number           String       @map("cert_number")
   name             String       @map("cert_name")
-  issuingAuthority String       @map("issuing_authority")
-  acquisitionDate  DateTime     @map("acquisition_date")
-  expDate          DateTime?    @map("exp_date")
-  regTime          DateTime     @default(now()) @map("reg_time")
+  issuingAuthority String       @map("issuing_authority") //발행기관
+  acquisitionDate  DateTime     @map("acquisition_date") //취득날짜
+  expDate          DateTime?    @map("exp_date") //종료날짜
+  regTime          DateTime     @default(now()) @map("reg_time") //등록일
+  remarks          String?      @map("remarks") @db.Text
   attachments      Attachment[]
   employee         Employee     @relation(fields: [employeeId], references: [id])
 

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, Matches, IsEmail, IsNotEmpty, IsBoolean, IsString, IsOptional, IsDateString, IsArray, ValidateNested } from 'class-validator';
+import { IsNumber, IsInt, Matches, IsEmail, IsNotEmpty, IsBoolean, IsString, IsOptional, IsDateString, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // 1. 하위 DTO: 전직장 경력
@@ -41,9 +41,17 @@ export class PreProjectAssignmentDto {
 
 // 2. 하위 DTO: 자격증
 export class CertificateDto {
+  @IsOptional()
+  @IsNumber()
+  id?: number;
+
   @ApiProperty({ description: '구분 코드 (CERT: 취득, COMPL: 수료)', example: 'CERT' })
   @IsString()
   type: string;
+
+  @ApiProperty({ description: '자격증번호', example: '12345' })
+  @IsString()
+  number: string;
 
   @ApiProperty({ description: '자격증/교육 명칭', example: '정보처리기사' })
   @IsString()
@@ -66,6 +74,11 @@ export class CertificateDto {
   @IsArray()
   @IsOptional()
   attachmentPaths?: string;
+
+  @ApiPropertyOptional({ description: '자격증 비고' })
+  @IsArray()
+  @IsOptional()
+  remarks?: string;
 }
 
 // 3. 메인 DTO: 신규 사원 등록

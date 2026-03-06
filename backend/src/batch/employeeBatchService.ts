@@ -133,6 +133,7 @@ export class EmployeeBatchService implements OnModuleInit {
           jobRoleCode: string;
           departmentId: number;
           teamId: number;
+          deptId: number;
           typeCode: string;
         }
       >();
@@ -144,25 +145,34 @@ export class EmployeeBatchService implements OnModuleInit {
 
       orgData.forEach((row) => {
         const empNo = String(row[1] || ''); // 사번 (B열)
+        if (!empNo) return;
 
         if (empNo) {
+          const findOrgId = (name: string): number | null => {
+            if (!name || name.trim() === '') return null;
+
+            const idStr = orgLookup[name.trim()] || orgLookup[Object.keys(orgLookup).find((key) => key.includes(name) || name.includes(key)) || ''];
+
+            const parsedId = idStr ? Number(idStr) : null;
+            return parsedId !== null && !isNaN(parsedId) && parsedId !== 0 ? parsedId : null;
+          };
+
           const excelDeptName = String(row[7] || '').trim();
           const excelTeamName = String(row[8] || '').trim();
 
-          const findOrgId = (name: string) => {
-            if (!name) return '';
-            if (orgLookup[name]) return orgLookup[name];
-            const fuzzyKey = Object.keys(orgLookup).find((key) => key.includes(name) || name.includes(key));
-            return fuzzyKey ? orgLookup[fuzzyKey] : '';
-          };
+          const teamId = findOrgId(excelTeamName);
+          const departmentId = findOrgId(excelDeptName);
+
+          const deptId = teamId || departmentId;
 
           orgMap.set(empNo, {
             no: empNo,
             jobTitleCode: codeLookup[`JOB_TITLE_${String(row[3])}`] || '', // 직책
             jobPositionCode: codeLookup[`JOB_POSITION_${String(row[4])}`] || '', // 직급
             jobRoleCode: codeLookup[`JOB_ROLE_${String(row[6])}`] || '', // 직무
-            departmentId: Number(findOrgId(excelDeptName)),
-            teamId: Number(findOrgId(excelTeamName)),
+            departmentId: departmentId as number, // 💡 TS 에러 방지용 단언 (실제값은 null 가능)
+            teamId: teamId as number,
+            deptId: deptId as number,
             typeCode: codeLookup[`EMP_TYPE_${String(row[5])}`] || '',
           });
         }
@@ -241,12 +251,12 @@ export class EmployeeBatchService implements OnModuleInit {
           deptId: (orgInfo.teamId || orgInfo.departmentId) ?? undefined,
 
           // 직급/직책 (코드 또는 명칭)
-          jobTitle: orgInfo.jobTitleCode || '미지정',
-          jobPosition: orgInfo.jobPositionCode || '미지정',
-          jobRole: orgInfo.jobRoleCode || '미지정',
+          jobTitle: orgInfo.jobTitleCode || null,
+          jobPosition: orgInfo.jobPositionCode || null,
+          jobRole: orgInfo.jobRoleCode || null,
 
           // 기본 필수 필드 (데이터가 없다면 임시값 설정) ㅋ
-          password: await bcrypt.hash('password123!', 10),
+          password: await bcrypt.hash('qwer!@#$', 10),
           residentNo: String(row[8] || '').trim(),
           birthDate: this.parseBirthDate(String(row[9]).substring(0, 6)) ?? new Date('1900-01-01'),
           joinDate: this.parseExcelDate(row[3]) ?? new Date(),
@@ -289,10 +299,10 @@ export class EmployeeBatchService implements OnModuleInit {
 
         const historyData = {
           employeeId: employeeData.id,
-          departmentId: employeeData.departmentId,
-          teamId: employeeData.teamId,
-          jobPosition: employeeData.jobPosition,
-          jobTitle: employeeData.jobTitle,
+          departmentId: employeeData.departmentId ?? null,
+          teamId: employeeData.teamId ?? null,
+          jobPosition: employeeData.jobPosition ?? null,
+          jobTitle: employeeData.jobTitle ?? null,
           applyDate: new Date('2026-01-01'),
           regTime: new Date('2026-01-01'),
           memo: null,
