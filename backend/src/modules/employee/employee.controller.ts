@@ -6,8 +6,7 @@ import { EmployeeService } from './employee.service';
 import { RegisterEmployeeDto } from './dto/register-employee.dto';
 import { QueryEmployeeDto } from './dto/query-employee.dto';
 import { EmployeeListResponseDto } from './dto/employee-list-response.dto';
-import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
-import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { EmployeeDetailResponseDto, UpdateEmployeeDto } from '@modules/dto/employee-detail.dto';
 import type { Employee as User } from '@prisma/client';
 
 @ApiTags('인사관리')
@@ -58,5 +57,16 @@ export class EmployeeController {
   @ApiResponse({ status: 404, description: '사원을 찾을 수 없음' })
   async update(@Param('id') id: string, @Body() updateEmployeeDto: UpdateEmployeeDto) {
     return await this.employeeService.update(id, updateEmployeeDto);
+  }
+
+  @Post('bulk-upsert')
+  async bulkUpsert(@Body('members') members: any[]) {
+    const result = await this.employeeService.bulkUpsertMembers(members);
+
+    return {
+      count: result.successList.length,
+      failCount: result.failureList.length,
+      message: '성공적으로 처리되었습니다.',
+    };
   }
 }

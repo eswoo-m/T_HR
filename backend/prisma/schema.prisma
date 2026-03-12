@@ -70,6 +70,7 @@ model Employee {
   jobPosition  String?   @map("job_position")
   jobTitle     String?   @map("job_title")
   jobRole      String?   @map("job_role")
+  jobRole2     String?   @map("job_role2")
   assignStatus String?   @map("assign_status")
   authLevel    String    @default("USER") @map("auth_level")
   email        String?
@@ -115,8 +116,8 @@ model EmployeeDetail {
   eduLevel          String?     @map("edu_level")
   lastSchool        String?     @map("last_school")
   major             String?
-  entranceDate      DateTime?   @map("entrance_date") @db.Date
   graduationDate    DateTime?   @map("graduation_date") @db.Date
+  eduStatus         String?     @map("edu_status")
   totalSwExperience Int?        @default(0) @map("total_sw_experience")
   prevSwExperience  Int?        @default(0) @map("prev_sw_experience")
   maritalStatus     String?     @map("marital_status")
@@ -126,6 +127,7 @@ model EmployeeDetail {
   zipCode           String?     @map("zip_code")
   address           String?
   addressDetail     String?     @map("address_detail")
+  residenceArea     String?     @map("residence_area")
   remarks           String?     @map("remarks") @db.Text
   profilePath       String?     @map("profile_path")
   employee          Employee    @relation(fields: [employeeId], references: [id])
@@ -218,6 +220,7 @@ model EmployeeOrganizationHistory {
   jobPosition  String?       @map("job_position")
   jobTitle     String?       @map("job_title")
   jobRole      String?       @map("job_role")
+  jobRole2     String?       @map("job_role2")
   applyDate    DateTime      @map("apply_date") @db.Date
   regTime      DateTime      @default(now()) @map("reg_time")
   memo         String?       @map("memo")

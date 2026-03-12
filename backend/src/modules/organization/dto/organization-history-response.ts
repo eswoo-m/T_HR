@@ -16,6 +16,8 @@ export interface OrgHistoryResponse {
   projectPeriod?: string;
   members?: {
     name: string;
-    position: string;
+    jobPosition?: string;
+    jobTitle?: string;
+    jobRole?: string;
   }[];
 }

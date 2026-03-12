@@ -249,11 +249,17 @@ export class OrganizationService {
           projectName: currentProject?.name || '',
           projectPeriod: currentProject ? `${formatDate(currentProject.startDate)} ~ ${formatDate(currentProject.endDate)}` : '',
 
-          // ✅ 수정: h.jobLevel 대신 h.jobPosition 사용 (이력 테이블 필드 교정)
-          members: targetHistory.map((h: any) => ({
-            name: h.employee.nameKr,
-            position: h.jobPosition || h.jobRole || '팀원',
-          })),
+          members: targetHistory.map((h: any) => {
+            const item = h as { employee?: { nameKr?: string }; jobPosition?: string; jobTitle?: string; jobRole?: string; jobRole2?: string};
+
+            return {
+              name: item.employee?.nameKr || '',
+              jobPosition: item.jobPosition || '',
+              jobTitle: item.jobTitle || '',
+              jobRole: item.jobRole || '',
+              jobRole2: item.jobRole2 || '',
+            };
+          }),
         };
       };
 
@@ -379,27 +385,52 @@ export class OrganizationService {
 
     const targetDept = await tx.organization.findUnique({
       where: { id: targetDeptId },
-      select: { id: true, parentId: true },
+      include: {
+        _count: {
+          select: { children: true },
+        },
+      },
     });
-    if (!targetDept) throw new NotFoundException('대상 부서를 찾을 수 없습니다.');
 
-    // ✅ 수정: jobLevel 대신 실제 필드인 jobPosition 조회
+    if (!targetDept) throw new NotFoundException('대상 부서를 찾을 수 없습니다.');
+    const hasChildren = targetDept._count?.children > 0;
+
     const currentEmployees = await tx.employee.findMany({
       where: { id: { in: memberIds } },
-      select: { id: true, jobPosition: true, jobRole: true },
+      select: { id: true, jobPosition: true, jobRole: true, jobRole2: true, jobTitle: true },
     });
 
-    // ✅ 수정: 이력 생성 시 jobPosition 필드로 매핑
     await tx.employeeOrganizationHistory.createMany({
-      data: currentEmployees.map((emp: any) => ({
-        employeeId: emp.id,
-        departmentId: targetDept.parentId ?? targetDeptId,
-        teamId: targetDeptId,
-        jobPosition: emp.jobPosition, // jobLevel -> jobPosition
-        jobRole: emp.jobRole,
-        applyDate: applyDate,
-        memo: '조직 개편/폐지에 따른 자동 이동 예약',
-      })),
+      data: currentEmployees.map((emp: any) => {
+        const e = emp as { id: any; jobPosition: any; jobRole: any; jobRole2: any; jobTitle: any };
+
+        return {
+          employeeId: String(e.id),
+          departmentId: hasChildren ? targetDept.id : (targetDept.parentId ?? targetDept.id),
+          teamId: targetDeptId,
+          jobPosition: String(e.jobPosition || ''),
+          jobRole: String(e.jobRole || ''),
+          jobRole2: String(e.jobRole2 || ''),
+          jobTitle: String(e.jobTitle || ''),
+          applyDate: applyDate,
+          memo: '조직 개편/폐지에 따른 자동 이동 예약',
+        };
+      }),
     });
+
+    // 조직변경이 오늘 날짜이면
+    const today = new Date();
+    const isToday = applyDate.getFullYear() === today.getFullYear() && applyDate.getMonth() === today.getMonth() && applyDate.getDate() === today.getDate();
+
+    if (isToday) {
+      await tx.employee.updateMany({
+        where: { id: { in: memberIds } },
+        data: {
+          departmentId: hasChildren ? targetDept.id : (targetDept.parentId ?? targetDept.id),
+          teamId: targetDeptId,
+          deptId: targetDeptId,
+        },
+      });
+    }
   }
 }

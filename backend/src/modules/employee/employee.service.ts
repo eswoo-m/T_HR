@@ -1,16 +1,31 @@
-import { Injectable, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, ConflictException, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterEmployeeDto } from './dto/register-employee.dto';
 import { QueryEmployeeDto, CareerRange } from './dto/query-employee.dto';
-import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { EmployeeDetailResponseDto } from './dto/employee-detail-response.dto';
+import { UpdateEmployeeDto, EmployeeDetailResponseDto } from '@modules/dto/employee-detail.dto';
 
 import { getErrorMessage } from '@common/utils/error.util';
 import { saveProfileImage } from '@common/utils/file-upload.util';
+import { isValidDate } from '@common/utils/date.util';
 import { getKstDate, calculateTotalCareerMonths, calculateCurrentServiceMonths } from '@common/utils/date.util';
 
 import * as bcrypt from 'bcrypt';
+
+interface RawMember {
+  no: string;
+  nameKr: string;
+  email: string;
+  departmentId?: number;
+  education?: {
+    level?: string;
+    school?: string;
+    major?: string;
+    graduationDate?: string | Date;
+    status?: string;
+  };
+  [key: string]: any;
+}
 
 // Prisma 타입 정의 (Relation 포함)
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
@@ -36,8 +51,15 @@ type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   };
 }>;
 
+interface BatchData {
+  employeeData: Prisma.EmployeeUncheckedCreateInput;
+  detailData: Prisma.EmployeeDetailUncheckedCreateInput;
+  historyData: Prisma.EmployeeOrganizationHistoryUncheckedCreateInput;
+}
+
 @Injectable()
 export class EmployeeService {
+  private readonly logger = new Logger(EmployeeService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   // =======================================================================
@@ -46,6 +68,7 @@ export class EmployeeService {
   async register(dto: RegisterEmployeeDto, adminId: string) {
     const TODAY = getKstDate();
 
+    // 1. 중복 체크
     const existing = await this.prisma.employee.findFirst({
       where: {
         OR: [{ id: dto.id }, { no: dto.no }, { AND: [{ residentNo: dto.residentNo }, { exitDate: null }] }],
@@ -70,6 +93,7 @@ export class EmployeeService {
 
     return this.prisma.$transaction(async (tx) => {
       try {
+        // 사원 기본 정보 생성
         const employee = await tx.employee.create({
           data: {
             id: dto.id,
@@ -79,7 +103,7 @@ export class EmployeeService {
             nameCh: dto.nameCh,
             residentNo: dto.residentNo,
             password: hashedPassword,
-            birthDate: new Date(dto.birthDate),
+            birthDate: dto.birthDate ? new Date(dto.birthDate) : new Date(),
             isLunar: dto.isLunar ?? false,
             gender: dto.gender,
             departmentId: dto.departmentId,
@@ -88,6 +112,7 @@ export class EmployeeService {
             jobPosition: dto.jobPosition,
             jobTitle: dto.jobTitle,
             jobRole: dto.jobRole,
+            jobRole2: dto.jobRole2,
             assignStatus: dto.assignStatus,
             authLevel: dto.authLevel,
             email: dto.email,
@@ -96,24 +121,29 @@ export class EmployeeService {
           },
         });
 
+        // 상세 정보 생성
         await tx.employeeDetail.create({
           data: {
             employeeId: employee.id,
             type: dto.type || 'REGULAR',
             hrStatus: dto.hrStatus || 'EMPLOYED',
-            skillLevel: dto.skillLevel || '초급',
+            skillLevel: dto.skillLevel || '',
             eduLevel: dto.eduLevel,
             lastSchool: dto.lastSchool,
+            graduationDate: dto.graduationDate,
+            eduStatus: dto.eduStatus,
             major: dto.major,
             maritalStatus: dto.maritalStatus,
             totalSwExperience: dto.totalSwExperience || 0,
             zipCode: dto.zipCode,
             address: dto.address,
             addressDetail: dto.addressDetail,
+            residenceArea: dto.residenceArea,
             profilePath: savedProfilePath,
           },
         });
 
+        // 발령/조직 이력 생성
         await tx.employeeOrganizationHistory.create({
           data: {
             employeeId: employee.id,
@@ -126,6 +156,7 @@ export class EmployeeService {
           },
         });
 
+        // 경력 사항 (createMany 활용)
         if (dto.previousExperiences && dto.previousExperiences.length > 0) {
           await tx.previousExperience.createMany({
             data: dto.previousExperiences.map((exp) => ({
@@ -142,6 +173,7 @@ export class EmployeeService {
           });
         }
 
+        // 자격증 및 첨부파일
         if (dto.certificates && dto.certificates.length > 0) {
           for (const cert of dto.certificates) {
             const newCert = await tx.certificate.create({
@@ -161,7 +193,7 @@ export class EmployeeService {
               await tx.attachment.create({
                 data: {
                   employeeId: employee.id,
-                  uploaderId: employee.id,
+                  uploaderId: adminId,
                   certificateId: newCert.id,
                   fileType: 'CERTIFICATE',
                   filePath: path,
@@ -174,6 +206,7 @@ export class EmployeeService {
           }
         }
 
+        // 자산 할당 업데이트
         if (dto.assetIds && dto.assetIds.length > 0) {
           await tx.asset.updateMany({
             where: {
@@ -187,6 +220,8 @@ export class EmployeeService {
             },
           });
         }
+
+        return employee;
       } catch (error) {
         console.error('Registration Transaction Error:', error);
         throw new InternalServerErrorException('사원 등록 처리 중 오류가 발생했습니다.');
@@ -235,6 +270,7 @@ export class EmployeeService {
           id: emp.id,
           no: emp.no,
           name: emp.nameKr,
+          birthDate: emp.birthDate,
           departmentId: emp.departmentId,
           department: emp.department?.name,
           deptId: emp.deptId,
@@ -306,7 +342,7 @@ export class EmployeeService {
     return this.prisma.$transaction(async (tx) => {
       const { basicInfo, skillsInfo, prevProjects, projects } = dto;
 
-      // console.log('📦 수신 데이터(DTO):', JSON.stringify(dto, null, 2));
+      console.log('📦 수신 데이터(DTO):', JSON.stringify(dto, null, 2));
 
       if (basicInfo) {
         await tx.employee.update({
@@ -325,20 +361,37 @@ export class EmployeeService {
           },
         });
 
+        const rawGraduationDate = basicInfo.education?.graduationDate;
+        let graduationDate: Date | null = null;
+
+        if (rawGraduationDate) {
+          let parsed: Date;
+
+          if (typeof rawGraduationDate === 'string') {
+            const dateStr = rawGraduationDate.includes('-') ? rawGraduationDate : rawGraduationDate.replace(/\./g, '-');
+            parsed = new Date(dateStr);
+          } else {
+            parsed = rawGraduationDate; // 이미 Date 객체인 경우
+          }
+
+          graduationDate = isValidDate(parsed) ? parsed : null;
+        }
+
         await tx.employeeDetail.update({
           where: { employeeId: id },
           data: {
-            type: basicInfo.type,
-            hrStatus: basicInfo.hrStatus,
-            eduLevel: basicInfo.eduLevel ?? null,
-            lastSchool: basicInfo.lastSchool ?? null,
-            major: basicInfo.major ?? null,
-            entranceDate: basicInfo.entranceDate ? new Date(`${basicInfo.entranceDate.replace(/\./g, '-')}T12:00:00Z`) : null,
-            graduationDate: basicInfo.graduationDate ? new Date(`${basicInfo.graduationDate.replace(/\./g, '-')}T12:00:00Z`) : null,
+            type: basicInfo.type ?? undefined,
+            hrStatus: basicInfo.hrStatus ?? undefined,
+            eduLevel: basicInfo.education.level ?? null,
+            lastSchool: basicInfo.education.school ?? null,
+            major: basicInfo.education.major ?? null,
+            graduationDate: graduationDate,
+            eduStatus: basicInfo.education.status ?? null,
             maritalStatus: basicInfo.maritalStatus,
             zipCode: basicInfo.zipCode,
             address: basicInfo.address,
             addressDetail: basicInfo.addressDetail,
+            residenceArea: basicInfo.residenceArea,
             profilePath: basicInfo.profileImage,
           },
         });
@@ -429,12 +482,14 @@ export class EmployeeService {
           await tx.preProjectAssignment.createMany({
             data: prevProjects.map((pp) => ({
               employeeId: id,
-              projectName: pp.projectName,
+              projectName: pp.projectName ?? '',
               customerName: pp.customerName || null,
               startDate: pp.startDate ? new Date(pp.startDate) : new Date(),
               endDate: pp.endDate ? new Date(pp.endDate) : null,
               assignedRole: pp.assignedRole || null,
+              taskName: pp.taskName || null,
               tools: pp.tools || null,
+              taskSummary: pp.taskSummary || null,
               workDetail: pp.workDetail || null,
               contribution: pp.contribution || null,
             })),
@@ -463,6 +518,184 @@ export class EmployeeService {
     });
   }
 
+  async bulkUpsertMembers(members: RawMember[]) {
+    const successList: string[] = [];
+    const failureList: any[] = [];
+
+    for (const member of members) {
+      let currentEmployeeData: Prisma.EmployeeUncheckedCreateInput | null = null;
+
+      try {
+        const { employeeData, detailData, historyData } = await this.prepareBatchData(member);
+        currentEmployeeData = employeeData;
+
+        await this.prisma.$transaction(async (tx) => {
+          const existingEmployee = await tx.employee.findUnique({
+            where: { no: employeeData.no },
+            include: { employeeDetail: true },
+          });
+
+          let employeeId = existingEmployee?.id;
+
+          if (!existingEmployee) {
+            const newEmployee = await tx.employee.create({ data: employeeData });
+            employeeId = newEmployee.id;
+
+            await tx.employeeDetail.create({
+              data: { ...detailData, employeeId },
+            });
+
+            await tx.employeeOrganizationHistory.create({
+              data: {
+                ...historyData,
+                employeeId: employeeId,
+                memo: '신규 등록 발령',
+                applyDate: new Date(),
+              },
+            });
+          } else {
+            // [CASE 2] 계정이 있는 경우 -> 변경 사항 확인
+            // 비교하고 싶은 필드들을 나열하세요 (여기에 이름, 성별 등 추가 가능)
+            const isBasicChanged =
+              existingEmployee.nameKr !== employeeData.nameKr ||
+              existingEmployee.email !== employeeData.email ||
+              existingEmployee.departmentId !== (employeeData.departmentId ?? null) ||
+              existingEmployee.teamId !== (employeeData.teamId ?? null) ||
+              existingEmployee.jobPosition !== (employeeData.jobPosition ?? null) ||
+              existingEmployee.jobTitle !== (employeeData.jobTitle ?? null);
+
+            // 상세 정보(detail) 변경 확인
+            const existingDetail = existingEmployee.employeeDetail;
+            const isDetailChanged = !existingDetail || existingDetail.address !== detailData.address || existingDetail.emergencyPhone !== detailData.emergencyPhone;
+
+            // 2-1. 본체나 상세정보가 바뀌었을 때만 UPDATE
+            if (isBasicChanged || isDetailChanged) {
+              await tx.employee.update({
+                where: { no: employeeData.no },
+                data: employeeData,
+              });
+
+              await tx.employeeDetail.upsert({
+                where: { employeeId: existingEmployee.id },
+                update: detailData,
+                create: { ...detailData, employeeId: existingEmployee.id },
+              });
+            }
+
+            // 2-2. 조직 정보(History 대상)가 바뀌었을 때만 HISTORY 생성
+            const isHistoryChanged = existingEmployee.departmentId !== (employeeData.departmentId ?? null) || existingEmployee.teamId !== (employeeData.teamId ?? null) || existingEmployee.jobPosition !== (employeeData.jobPosition ?? null);
+
+            if (isHistoryChanged) {
+              await tx.employeeOrganizationHistory.create({
+                data: {
+                  ...historyData,
+                  employeeId: existingEmployee.id,
+                  memo: '엑셀 업로드 정보 변경 자동 발령',
+                  applyDate: new Date(),
+                },
+              });
+            }
+          }
+        });
+
+        successList.push(member.no);
+      } catch (error) {
+        let errorMessage = error instanceof Error ? error.message : String(error);
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          const target = error.meta?.target as string[];
+
+          if (target?.includes('id') && currentEmployeeData) {
+            const intruder = await this.prisma.employee.findUnique({
+              where: { id: currentEmployeeData.id }, // 🚀 여기!
+              select: { no: true, nameKr: true },
+            });
+
+            errorMessage = `[ID 충돌] 사번 ${member.no}가 쓰려는 ID '${currentEmployeeData.id}'를 ` + `이미 DB 사번: ${intruder?.no}(${intruder?.nameKr})님이 사용 중!`;
+          }
+        }
+
+        this.logger.error(`❌ 실패: ${errorMessage}`);
+        failureList.push({ no: member.no, error: errorMessage });
+      }
+    }
+
+    return { successList, failureList };
+  }
+
+  private async prepareBatchData(member: RawMember): Promise<BatchData> {
+    const emailId = member.email?.split('@')[0] || `user_${member.no}`;
+    const hashedPassword = await bcrypt.hash('qwer!@#$', 10);
+
+    const rawDeptId = member.departmentId ? Number(member.departmentId) : null;
+    const rawTeamId = member.teamId ? Number(member.teamId) : null;
+
+    // 1. Employee 가공
+    const employeeData: Prisma.EmployeeUncheckedCreateInput = {
+      id: emailId,
+      no: member.no,
+      nameKr: member.nameKr,
+      nameEn: (member.nameEn as string) || null,
+      nameCh: (member.nameCh as string) || null,
+      email: member.email || `${member.no}@temporary.com`,
+      password: hashedPassword,
+      residentNo: (member.residentNo as string) || `TEMP-${member.no}`,
+      gender: (member.gender as string) || '',
+      birthDate: member.birthDate ? new Date(member.birthDate) : new Date('1900-01-01'),
+      joinDate: member.joinDate ? new Date(member.joinDate) : new Date(),
+      exitDate: member.exitDate ? new Date(member.exitDate) : null,
+      isLunar: !!member.isLunar,
+      authLevel: (member.authLevel as string) || '',
+      departmentId: rawDeptId !== null && !isNaN(rawDeptId) ? rawDeptId : null,
+      teamId: rawTeamId !== null && !isNaN(rawTeamId) ? rawTeamId : null,
+      deptId: rawTeamId || rawDeptId || null,
+
+      jobTitle: (member.jobTitle as string) || null,
+      jobPosition: (member.jobPosition as string) || null,
+      jobRole: (member.jobRole as string) || null,
+    };
+
+    // 2. Detail 가공
+    const detailData: Prisma.EmployeeDetailUncheckedCreateInput = {
+      employeeId: emailId, // Unchecked 타입일 경우 필수! ㅋ🕵️‍♂️
+      hrStatus: (member.hrStatus as string) || 'EMPLOYED',
+      type: (member.type as string) || '',
+      skillLevel: (member.skillLevel as string) || '',
+
+      eduLevel: (member.education?.level as string) || 'null',
+      lastSchool: (member.education?.school as string) || null,
+      major: (member.education?.major as string) || null,
+      graduationDate: member.education?.graduationDate ? new Date(member.education.graduationDate as string) : null,
+
+      address: (member.address as string) || null,
+      addressDetail: (member.addressDetail as string) || null,
+      residenceArea: (member.residenceArea as string) || null,
+      emergencyPhone: (member.emergencyPhone as string) || null,
+      emergencyRelation: (member.emergencyRelation as string) || null,
+
+      // 숫자는 as number로!
+      totalSwExperience: (member.totalSwExperience as number) || 0,
+      prevSwExperience: (member.prevSwExperience as number) || 0,
+
+      maritalStatus: (member.maritalStatus as string) || null,
+      weddingAnniv: member.weddingAnniv ? new Date(member.weddingAnniv as string) : null,
+    };
+
+    // 3. History 기본 틀 가공
+    const historyData: Prisma.EmployeeOrganizationHistoryUncheckedCreateInput = {
+      employeeId: emailId,
+      departmentId: (employeeData.departmentId as number) || null,
+      teamId: (employeeData.teamId as number) || null,
+      jobPosition: (employeeData.jobPosition as string) || null,
+      jobTitle: (employeeData.jobTitle as string) || null,
+      jobRole: (employeeData.jobRole as string) || null,
+      applyDate: employeeData.joinDate as Date,
+      memo: '일괄 업로드 가공 데이터',
+    };
+
+    return { employeeData, detailData, historyData };
+  }
+
   private isWithinCareerRange(years: number, range: CareerRange): boolean {
     const ranges = {
       [CareerRange.BEGINNER]: years <= 3,
@@ -488,9 +721,12 @@ export class EmployeeService {
         isLunar: emp.isLunar,
         gender: emp.gender,
         departmentId: emp.departmentId,
-        teamId: emp.teamId,
+        department: emp.department?.name || null,
+        teamId: emp.teamId || null,
+        team: emp.team?.name || null,
         jobPosition: emp.jobPosition,
         jobRole: emp.jobRole,
+        jobRole2: emp.jobRole2,
         jobTitle: emp.jobTitle,
         assignStatus: emp.assignStatus,
         email: emp.email,
@@ -501,11 +737,13 @@ export class EmployeeService {
         skillLevel: emp.employeeDetail?.skillLevel || null,
         leaveStartDate: emp.employeeDetail?.leaveStartDate || null,
         leaveEndDate: emp.employeeDetail?.leaveEndDate || null,
-        eduLevel: emp.employeeDetail?.eduLevel || null,
-        lastSchool: emp.employeeDetail?.lastSchool || null,
-        major: emp.employeeDetail?.major || null,
-        entranceDate: emp.employeeDetail?.entranceDate || null,
-        graduationDate: emp.employeeDetail?.graduationDate || null,
+        education: {
+          level: emp.employeeDetail?.eduLevel || null,
+          school: emp.employeeDetail?.lastSchool || null,
+          major: emp.employeeDetail?.major || null,
+          graduationDate: emp.employeeDetail?.graduationDate || null,
+          status: emp.employeeDetail?.eduStatus || null,
+        },
         totalSwExperience: emp.employeeDetail?.totalSwExperience || null,
         prevSwExperience: emp.employeeDetail?.prevSwExperience || null,
         maritalStatus: emp.employeeDetail?.maritalStatus || null,
@@ -515,6 +753,7 @@ export class EmployeeService {
         zipCode: emp.employeeDetail?.zipCode || null,
         address: emp.employeeDetail?.address || null,
         addressDetail: emp.employeeDetail?.addressDetail || null,
+        residenceArea: emp.employeeDetail?.residenceArea || null,
         experienceDisplay: `${Math.floor((emp.employeeDetail?.totalSwExperience || 0) / 12)}년`,
         remarks: emp.employeeDetail?.remarks || null,
         profileImage: emp.employeeDetail?.profilePath ?? null,

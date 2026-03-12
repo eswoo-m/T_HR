@@ -62,8 +62,8 @@ async function bootstrap() {
 
   // 3. 전역 설정 (CORS, Pipe, Filter)
   app.enableCors({
-    origin: 'http://localhost:5173',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    origin: [/*'http://59.29.234.26:3001', */ 'http://localhost:5173'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
 

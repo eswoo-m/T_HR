@@ -9,8 +9,8 @@ export class DailyBatchService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // @Cron(CronExpression.EVERY_MINUTE)
   async handleDailyTask() {
     this.logger.log('Daily Batch START... ');
 
@@ -60,6 +60,7 @@ export class DailyBatchService {
               jobPosition: h.jobPosition,
               jobTitle: h.jobTitle,
               jobRole: h.jobRole,
+              jobRole2: h.jobRole2,
             },
           });
         }),

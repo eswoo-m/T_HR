@@ -131,6 +131,7 @@ export class EmployeeBatchService implements OnModuleInit {
           jobTitleCode: string;
           jobPositionCode: string;
           jobRoleCode: string;
+          jobRole2Code: string;
           departmentId: number;
           teamId: number;
           deptId: number;
@@ -170,6 +171,7 @@ export class EmployeeBatchService implements OnModuleInit {
             jobTitleCode: codeLookup[`JOB_TITLE_${String(row[3])}`] || '', // 직책
             jobPositionCode: codeLookup[`JOB_POSITION_${String(row[4])}`] || '', // 직급
             jobRoleCode: codeLookup[`JOB_ROLE_${String(row[6])}`] || '', // 직무
+            jobRole2Code: codeLookup[`JOB_ROLE2_${String(row[6])}`] || '', // 직무
             departmentId: departmentId as number, // 💡 TS 에러 방지용 단언 (실제값은 null 가능)
             teamId: teamId as number,
             deptId: deptId as number,
@@ -254,6 +256,7 @@ export class EmployeeBatchService implements OnModuleInit {
           jobTitle: orgInfo.jobTitleCode || null,
           jobPosition: orgInfo.jobPositionCode || null,
           jobRole: orgInfo.jobRoleCode || null,
+          jobRole2: orgInfo.jobRole2Code || null,
 
           // 기본 필수 필드 (데이터가 없다면 임시값 설정) ㅋ
           password: await bcrypt.hash('qwer!@#$', 10),
@@ -301,6 +304,7 @@ export class EmployeeBatchService implements OnModuleInit {
           employeeId: employeeData.id,
           departmentId: employeeData.departmentId ?? null,
           teamId: employeeData.teamId ?? null,
+          ㅇteamId: employeeData.teamId ?? null,
           jobPosition: employeeData.jobPosition ?? null,
           jobTitle: employeeData.jobTitle ?? null,
           applyDate: new Date('2026-01-01'),
@@ -340,8 +344,6 @@ export class EmployeeBatchService implements OnModuleInit {
 
       const successList: string[] = [];
 
-      console.log(`\n🚀 DB 적재 시작... (총 ${finalDataList.length}명)`);
-
       for (const data of finalDataList) {
         const { employeeData, detailData, historyData } = data;
 
@@ -365,13 +367,11 @@ export class EmployeeBatchService implements OnModuleInit {
             });
 
             // 3. EmployeeHistory 저장 (이력은 보통 누적이므로 create)
-            // 만약 같은 날짜/같은 사유의 이력이 있으면 건너뛰고 싶다면 upsert를 쓰세요.
             await tx.employeeOrganizationHistory.create({
-              // 👈 employeeHistory가 아니라 전체 이름을 써야 합니다! ✨
               data: {
                 ...historyData,
                 employeeId: employee.id,
-              } as Prisma.EmployeeOrganizationHistoryUncheckedCreateInput, // 👈 여기도 타입을 맞춰주면 완벽! 🛡️
+              } as Prisma.EmployeeOrganizationHistoryUncheckedCreateInput,
             });
           });
 

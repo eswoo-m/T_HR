@@ -1,29 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { EmployeeDTO } from '@modules/dto/employee.dto';
 
-export class EmployeeResponseDto {
-  @ApiProperty({ description: '사원 ID' })
-  id: string;
-
-  @ApiProperty({ description: '성명(한글)' })
-  nameKr: string;
-
-  @ApiProperty({ description: '직급' })
-  position: string;
-
-  @ApiProperty({ description: '직무' })
-  role: string;
-
-  @ApiProperty({ description: '직책' })
-  title: string;
-
+export class EmployeeResponseDto extends EmployeeDTO {
   @ApiProperty({ description: '부서명' })
   departmentName: string;
 
   @ApiProperty({ description: '실(Division)명' })
   divisionName: string;
-
-  @ApiProperty({ description: '구분', example: '관리, 투입정산, 투입지원, 대기' })
-  status: string; // 현재 상태 구분
 
   @ApiProperty({ description: '경력' })
   experienceDisplay: number;

@@ -26,7 +26,7 @@ export const calculateTotalCareerMonths = (experiences: { entranceDate: Date; re
 // DB의 Date 객체를 프론트엔드용 문자열로 변환 (보낼 때)
 export const formatDate = (date: Date | null): string => {
   if (!date) return '';
-  return dayjs(date).format('YYYY.MM.DD');
+  return dayjs(date).format('YYYY-MM-DD');
 };
 
 // 프론트엔드의 문자열을 DB용 Date 객체로 변환 (받을 때)
@@ -67,4 +67,8 @@ export const calculateCurrentServiceMonths = (joinDate: Date | string | null | u
 
   const diff = now.diff(start, 'month');
   return diff > 0 ? diff : 0;
+};
+
+export const isValidDate = (date: any): boolean => {
+  return date instanceof Date && !isNaN(date.getTime());
 };
