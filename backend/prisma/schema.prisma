@@ -45,6 +45,7 @@ model Organization {
   historiesAsTeam         EmployeeOrganizationHistory[] @relation("TeamRelation")
 
   project_dept_rel Project[] @relation("project_department_idToorganization")
+  Asset            Asset[]
 
   @@index([parentId])
   @@index([startDate, endDate])
@@ -251,35 +252,55 @@ model PreviousExperience {
 }
 
 model Asset {
-  id             Int        @id @default(autoincrement())
-  employeeId     String?    @map("employee_id")
+  id             Int       @id @default(autoincrement())
+  employeeId     String?   @map("employee_id")
+  teamId         Int?      @map("team_id")
   name           String
-  typeId         String?    @map("type_id")
+  typeId         Int?      @map("type_id")
   vendor         String?
   model          String?
   number         String?
-  serialNo       String?    @map("serial_no")
-  purchaseDate   DateTime?  @map("purchase_date") @db.Date
-  purchaseAmount Decimal?   @map("purchase_amount") @db.Decimal(12, 2)
-  warrantyDate   DateTime?  @map("warranty_date") @db.Date
+  serialNo       String?   @map("serial_no")
+  purchaseDate   DateTime? @map("purchase_date") @db.Date
+  purchaseAmount Decimal?  @map("purchase_amount") @db.Decimal(12, 2)
+  warrantyDate   DateTime? @map("warranty_date") @db.Date
   status         String?
-  assignDate     DateTime?  @map("assign_date") @db.Date
-  registDate     DateTime   @default(now()) @map("regist_date")
-  assetTypeId    Int?
-  assetType      AssetType? @relation(fields: [assetTypeId], references: [id])
-  employee       Employee?  @relation(fields: [employeeId], references: [id])
+  assignDate     DateTime? @map("assign_date") @db.Date
+  registDate     DateTime  @default(now()) @map("regist_date")
+  remarks        String?   @map("remarks") @db.Text
+
+  assetType      AssetType?     @relation(fields: [typeId], references: [id])
+  employee       Employee?      @relation(fields: [employeeId], references: [id])
+  team           Organization?  @relation(fields: [teamId], references: [id])
+  assetHistories AssetHistory[]
 
   @@map("assets")
 }
 
 model AssetType {
-  id       Int      @id @default(autoincrement())
-  name     String
-  isActive Boolean  @default(true) @map("is_active")
-  regTime  DateTime @default(now()) @map("reg_time")
-  assets   Asset[]
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String
+  isActive    Boolean  @default(true) @map("is_active")
+  regTime     DateTime @default(now()) @map("reg_time")
+  assets      Asset[]
 
   @@map("assets_type")
+}
+
+model AssetHistory {
+  id        Int     @id @default(autoincrement())
+  assetId   Int     @map("asset_id")
+  category  String
+  content   String
+  remarks   String? @db.Text
+  cost      Int?    @default(0)
+  actorName String?
+
+  regTime DateTime @default(now()) @map("reg_time")
+  asset   Asset    @relation(fields: [assetId], references: [id])
+
+  @@map("assets_history")
 }
 
 model Customer {

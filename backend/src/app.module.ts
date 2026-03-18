@@ -10,6 +10,7 @@ import { OrganizationModule } from '@modules/organization/organization.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 import { DailyBatchService } from './batch/dailyBatchService';
+import { AssetModule } from '@modules/asset/asset.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DailyBatchService } from './batch/dailyBatchService';
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    AssetModule,
     CommonModule,
     PrismaModule,
     EmployeeModule,
