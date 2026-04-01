@@ -41,7 +41,7 @@ export class EmployeeBatchService implements OnModuleInit {
 
   private parseBirthDate = (dateStr: string | number): Date => {
     const str = String(dateStr).trim();
-    if (str.length !== 6) return new Date(); // 형식이 안 맞으면 오늘 날짜나 기본값 ㅋ
+    if (str.length !== 6) return new Date(); // 형식이 안 맞으면 오늘 날짜나 기본값
 
     const yearStr = str.substring(0, 2);
     const monthStr = str.substring(2, 4);
@@ -258,7 +258,7 @@ export class EmployeeBatchService implements OnModuleInit {
           jobRole: orgInfo.jobRoleCode || null,
           jobRole2: orgInfo.jobRole2Code || null,
 
-          // 기본 필수 필드 (데이터가 없다면 임시값 설정) ㅋ
+          // 기본 필수 필드 (데이터가 없다면 임시값 설정)
           password: await bcrypt.hash('qwer!@#$', 10),
           residentNo: String(row[8] || '').trim(),
           birthDate: this.parseBirthDate(String(row[9]).substring(0, 6)) ?? new Date('1900-01-01'),
@@ -330,7 +330,7 @@ export class EmployeeBatchService implements OnModuleInit {
         //   console.log('🔹 [History Data]');
         //   console.table(historyData);
         //
-        //   // 3. 날짜 객체 확인 (toISOString을 써야 시차가 정확히 보입니다 ㅋ)
+        //   // 3. 날짜 객체 확인 (toISOString을 써야 시차가 정확히 보입니다)
         //   // console.log('🔹 [Date Check]');
         //   // console.log(` - 생일: ${employeeData.birthDate?.toISOString().split('T')[0]}`);
         //   // console.log(` - 입사: ${employeeData.joinDate?.toISOString().split('T')[0]}`);
@@ -398,7 +398,7 @@ export class EmployeeBatchService implements OnModuleInit {
 
       if (failureList.length > 0) {
         console.log('🚫 [실패 명단 및 사유]');
-        // 테이블 형태로 깔끔하게 출력 ㅋ
+        // 테이블 형태로 깔끔하게 출력
         console.table(failureList);
       } else {
         console.log('🎉 축하합니다! 모든 데이터가 성공적으로 적재되었습니다.');
@@ -411,7 +411,7 @@ export class EmployeeBatchService implements OnModuleInit {
       // const rawData = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
       // const dataFromThirdRow = rawData.slice(2);
       //
-      // // 2. Prisma 양식에 맞게 매핑 ㅋ
+      // // 2. Prisma 양식에 맞게 매핑
       // const employees = dataFromThirdRow.map((row, index) => {
       //   // 🕵️‍♂️ 엑셀의 열 순서대로 인덱스를 맞추세요 (A열=0, B열=1, C열=2...)
       //   const employeeNo = String(row[0] || ''); // A열: 사번
@@ -420,7 +420,7 @@ export class EmployeeBatchService implements OnModuleInit {
       //   // const employeeJoinDate = row[3]; // D열: 입사일
       //
       //   return {
-      //     id: `EMP-${employeeNo}-${Date.now()}-${index}`, // 고유 ID 생성 ㅋ
+      //     id: `EMP-${employeeNo}-${Date.now()}-${index}`, // 고유 ID 생성
       //     employeeCode: employeeNo,
       //     nameKr: employeeName,
       //     email: employeeEmail,

@@ -314,7 +314,7 @@ export class OrganizationService {
       });
 
       if (!parentOrg) {
-        throw new BadRequestException(`상위 조직 '${dto.department}'을 찾을 수 없습니다. ㅋ`);
+        throw new BadRequestException(`상위 조직 '${dto.department}'을 찾을 수 없습니다.`);
       }
       parentIdNumber = parentOrg.id;
     }

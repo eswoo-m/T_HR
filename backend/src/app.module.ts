@@ -11,6 +11,7 @@ import { OrganizationModule } from '@modules/organization/organization.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DailyBatchService } from './batch/dailyBatchService';
 import { AssetModule } from '@modules/asset/asset.module';
+import { MonthlyBatchService } from './batch/MonthlyBatchService';
 
 @Module({
   imports: [
@@ -28,6 +29,6 @@ import { AssetModule } from '@modules/asset/asset.module';
     ProjectModule,
     OrganizationModule,
   ],
-  providers: [DailyBatchService],
+  providers: [DailyBatchService, MonthlyBatchService],
 })
 export class AppModule {}

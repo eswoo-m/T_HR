@@ -120,7 +120,7 @@ export class ProjectService {
             ]
           : []),
 
-        // 2. 부서 및 팀 필터 (Number 변환 처리 ㅋ)
+        // 2. 부서 및 팀 필터 (Number 변환 처리)
         ...(teamId ? [{ teamId: Number(teamId) }] : []),
         ...(departmentId && !teamId
           ? [
@@ -179,7 +179,16 @@ export class ProjectService {
         projectAssignment: {
           select: {
             employee: {
-              select: { nameKr: true },
+              select: {
+                id: true,
+                nameKr: true,
+                jobPosition: true,
+                employeeDetail: {
+                  select: {
+                    totalSwExperience: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -187,6 +196,7 @@ export class ProjectService {
       orderBy: { regTime: 'desc' },
     });
 
+    // 백엔드 return 부분 수정 제안
     return projects.map((p) => ({
       id: p.id,
       projectName: p.name,
@@ -197,10 +207,20 @@ export class ProjectService {
       status: p.status,
       startDate: p.startDate ? formatDate(p.startDate) : null,
       endDate: p.endDate ? formatDate(p.endDate) : null,
-      // period: formatDate(p.startDate) ~ formatDate(p.endDate),
       amount: p.amount,
       headcount: p.headcount,
-      memberNames: p.projectAssignment.map((pa) => pa.employee.nameKr).join(', '),
+
+      projectAssignment: p.projectAssignment.map((pa) => {
+        const emp = pa.employee;
+        const detail = emp.employeeDetail; // 상세 정보 참조
+
+        return {
+          employeeId: emp.id,
+          name: emp.nameKr,
+          jobPosition: emp.jobPosition || '-',
+          yearsOfExperience: Number(detail?.totalSwExperience || 0),
+        };
+      }),
     }));
   }
 
@@ -219,16 +239,16 @@ export class ProjectService {
             },
           },
           projectAssignmentPeriod: {
-            orderBy: { startDate: 'asc' }, // 투입 기간 순 정렬 ㅋ
+            orderBy: { startDate: 'asc' }, // 투입 기간 순 정렬
           },
         },
       });
 
       if (!assignments || assignments.length === 0) {
-        return []; // 구성원이 없으면 빈 배열 리턴! ㅋ
+        return []; // 구성원이 없으면 빈 배열 리턴!
       }
 
-      // 2. 가공해서 프론트가 쓰기 좋은 형태로 리턴 ㅋ
+      // 2. 가공해서 프론트가 쓰기 좋은 형태로 리턴
       return assignments.map((data) => ({
         employeeId: data.employeeId,
         name: data.employee.nameKr,
@@ -249,7 +269,7 @@ export class ProjectService {
         })),
       }));
     } catch (error: unknown) {
-      // 에러 핸들링은 사수님 기존 스타일 유지 ㅋ
+      // 에러 핸들링은 사수님 기존 스타일 유지
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new BadRequestException(`데이터베이스 요청 오류: ${error.code}`);
       }
@@ -329,7 +349,7 @@ export class ProjectService {
 
     members.sort((a, b) => a.name.localeCompare(b.name));
 
-    // 3️⃣ 최종 리턴! ㅋ
+    // 3️⃣ 최종 리턴!
     return { basicInfo, members };
   }
 
@@ -553,7 +573,6 @@ export class ProjectService {
       return { success: true };
     });
   }
-
   private formatAssignmentData(projectAssignment: ProjectAssignmentDto[]) {
     return {
       create: projectAssignment.map((pa) => ({

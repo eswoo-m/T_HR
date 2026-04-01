@@ -1,18 +1,45 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Param, Patch, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, UsePipes, ValidationPipe, UseGuards, Param, Patch, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { EmployeeService } from './employee.service';
 import { RegisterEmployeeDto } from './dto/register-employee.dto';
+import { QueryMonthlyListDto } from './dto/query-monthly-list.dto';
 import { QueryEmployeeDto } from './dto/query-employee.dto';
 import { EmployeeListResponseDto } from './dto/employee-list-response.dto';
+import { UpdateEmployeeAuthDto } from './dto/update-employee-auth.dto';
 import { EmployeeDetailResponseDto, UpdateEmployeeDto } from '@modules/dto/employee-detail.dto';
 import type { Employee as User } from '@prisma/client';
 
 @ApiTags('인사관리')
-@Controller('employee') // 접속 주소: /employee
+@Controller('employees')
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
+
+  @Get('monthly-list')
+  @ApiOperation({
+    summary: '월별 공수 현황 리스트 조회',
+    description: '검색 조건에 맞는 사원들의 월별 공수 및 프로젝트별 투입 현황을 조회합니다.',
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async queryMonthly(@Query() dto: QueryMonthlyListDto) {
+    return this.employeeService.queryMonthly(dto);
+  }
+
+  @Get('monthly-stats')
+  @ApiOperation({ summary: '월별 인력 공수율 추이 및 상세 명단 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '선택한 년/월 또는 최근 6개월간의 상태별 MM 합계 및 사원 목록 반환',
+  })
+  async getMonthlyStats(@Query('year') year?: string, @Query('month') month?: string) {
+    return await this.employeeService.getMonthlyStats(year, month);
+  }
+
+  @Get('monthly-stats/years')
+  async getMonthlyStatsYears() {
+    return await this.employeeService.getMonthlyStatsYears();
+  }
 
   @Post('register')
   @UseGuards(JwtAuthGuard)
@@ -39,6 +66,11 @@ export class EmployeeController {
   @ApiResponse({ status: 500, description: '서버 내부 오류 (DB 연결 실패 등)' })
   async query(@Query() dto: QueryEmployeeDto) {
     return await this.employeeService.query(dto);
+  }
+
+  @Get('auth-history')
+  async getAuthHistory() {
+    return this.employeeService.getAuthHistory();
   }
 
   @Get(':id')
@@ -68,5 +100,10 @@ export class EmployeeController {
       failCount: result.failureList.length,
       message: '성공적으로 처리되었습니다.',
     };
+  }
+
+  @Patch(':id/auth')
+  async updateEmployeeAuth(@Param('id') id: string, @Body() updateDto: UpdateEmployeeAuthDto) {
+    return await this.employeeService.updateEmployeeAuth(id, updateDto);
   }
 }

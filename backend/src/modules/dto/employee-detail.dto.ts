@@ -1,6 +1,7 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsOptional, ValidateNested, IsArray, IsString, IsNumber, IsDateString, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
+import { AssetDto } from '@modules/dto/asset.dto';
 
 /**
  * [공통] 프로젝트 정보 뼈대
@@ -69,6 +70,7 @@ export class BasicInfoBaseDto {
   @ApiProperty() @IsOptional() @IsString() nameEn: string | null;
   @ApiProperty() @IsOptional() @IsString() nameCh: string | null;
   @ApiProperty() @IsString() residentNo: string;
+  @ApiProperty() @IsOptional() @IsString() authLevel: string;
   @ApiProperty() @IsDateString() birthDate: string | Date;
   @ApiProperty() @IsBoolean() isLunar: boolean;
   @ApiProperty() @IsString() gender: string;
@@ -115,7 +117,7 @@ export class BasicInfoBaseDto {
   @ApiProperty() @IsOptional() @IsString() profileImage: string | null;
 
   @ApiProperty() @IsOptional() @IsArray() @IsString({ each: true }) previousExperiences: string[] | null;
-  @ApiProperty() @IsOptional() @IsArray() @IsString({ each: true }) assetsList: string[] | null;
+  @ApiProperty() @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => AssetDto) assets: AssetDto[] | null;
 }
 
 /**

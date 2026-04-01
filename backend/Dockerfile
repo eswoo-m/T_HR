@@ -1,5 +1,5 @@
 # 1. Node.js 환경 설정
-FROM node:18
+FROM node:20
 
 # 2. 작업 디렉토리 설정
 WORKDIR /app
@@ -21,4 +21,4 @@ RUN npm run build
 
 # 7. 실행 설정
 EXPOSE 3000
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/src/main.js"]

@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -55,7 +56,6 @@ export class AuthService {
 
     // 🌟 기존에 평문으로 잘못 저장된 데이터가 있다면 삭제 후 재생성하기 위해 처리
     if (existing) {
-      // 만약 비밀번호가 $로 시작하지 않으면(암호화가 안 되어 있으면) 삭제
       if (!existing.password.startsWith('$')) {
         await this.prisma.employee.delete({ where: { id: adminId } });
       } else {
@@ -83,5 +83,50 @@ export class AuthService {
     });
 
     return { message: '관리자 계정이 암호화되어 생성되었습니다.', status: 'created' };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.employee.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('사용자를 찾을 수 없습니다.');
+    }
+
+    const isMatch = await bcrypt.compare(dto.currentPassword, user.password);
+    if (!isMatch) {
+      throw new UnauthorizedException('현재 비밀번호가 일치하지 않습니다.');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+    await this.prisma.employee.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: '비밀번호가 성공적으로 변경되었습니다.' };
+  }
+
+  async initializePassword(targetId: string) {
+    try {
+      const employee = await this.prisma.employee.findUnique({
+        where: { id: targetId },
+      });
+
+      if (!employee) {
+        throw new NotFoundException('해당 사원을 찾을 수 없습니다.');
+      }
+
+      const hashedPassword = await bcrypt.hash('qwer!@#$', 10);
+
+      return await this.prisma.employee.update({
+        where: { id: targetId },
+        data: { password: hashedPassword },
+      });
+    } catch (error: any) {
+      throw new InternalServerErrorException(error.message || '서버 에러가 발생했습니다.');
+    }
   }
 }

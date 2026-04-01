@@ -48,7 +48,7 @@ export class CustomerContactDto {
   @IsBoolean()
   isPrimary: boolean;
 
-  // 중간 테이블 정보는 생성 시 필수가 아닐 수 있으므로 Optional 처리 ㅋ
+  // 중간 테이블 정보는 생성 시 필수가 아닐 수 있으므로 Optional 처리
   @ApiProperty({ type: () => [ProjectContactDto], description: '담당프로젝트', required: false })
   @IsOptional()
   @IsArray()

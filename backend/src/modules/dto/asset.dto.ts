@@ -11,6 +11,10 @@ export class AssetTypeDto {
 }
 
 export class AssetDto {
+  @IsNumber()
+  @IsOptional()
+  id: number;
+
   @IsString()
   @IsNotEmpty({ message: '자산명은 필수입니다.' })
   name: string;

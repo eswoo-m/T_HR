@@ -34,7 +34,6 @@ export class EmployeeDTO {
 
   @ApiProperty({ description: '주민등록번호', example: '900101-1234567' })
   @IsString()
-  @Matches(/^\d{6}-\d{7}$/, { message: '올바른 주민번호 형식이 아닙니다.' })
   @IsNotEmpty()
   residentNo: string;
 
@@ -120,4 +119,13 @@ export class EmployeeDTO {
   @IsString()
   @IsOptional()
   phone?: string;
+}
+
+export class EmployeesMonthlyStats {
+  employeeId: string;
+  assignedSettlement: number;
+  assignedSupport: number;
+  support: number;
+  waiting: number;
+  management: number;
 }

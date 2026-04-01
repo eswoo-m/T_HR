@@ -16,7 +16,7 @@ export class AssetController {
 
   @Get('types')
   async getAssetTypes() {
-    return await this.assetService.getAssetTypes();
+    return this.assetService.getAssetTypes();
   }
 
   @Patch('types/:id/status')

@@ -1,17 +1,11 @@
+// src/auth/decorators/get-user.decorator.ts
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { Request } from 'express';
+import { Employee } from '@prisma/client';
 
-export const GetUser = createParamDecorator((data: string | undefined, ctx: ExecutionContext) => {
-  // 1. 역참조 시 타입을 명시적으로 지정
-  const request = ctx.switchToHttp().getRequest<Request>();
+export const GetUser = createParamDecorator((data: keyof Employee | undefined, ctx: ExecutionContext) => {
+  // 요청 객체에서 user가 Employee 타입임을 명시
+  const request = ctx.switchToHttp().getRequest<{ user: Employee }>();
+  const user = request.user;
 
-  // 2. request.user가 any로 잡히지 않도록 타입을 단언하거나 unknown 처리
-  const user = request.user as Record<string, any> | undefined;
-
-  if (!user) {
-    return null;
-  }
-
-  // 3. 데이터를 안전하게 반환
-  return data ? (user[data] as unknown) : (user as unknown);
+  return data ? user?.[data] : user;
 });

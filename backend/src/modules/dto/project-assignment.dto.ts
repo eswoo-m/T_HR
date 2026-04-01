@@ -17,7 +17,7 @@ import { Type } from 'class-transformer';
  * 2. 부모 DTO
  */
 export class ProjectAssignmentDto {
-  @ApiProperty({ example: 'hg.jeong', description: '직원 ID' })
+  @ApiProperty({ example: '1', description: '프로젝트 ID' })
   @IsOptional()
   @IsInt()
   projectId: number;

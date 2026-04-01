@@ -22,7 +22,7 @@ export class UpdateOrganizationScheduledDto {
 
   @IsNumber()
   @IsOptional()
-  projectId: number; // 0이면 연결 없음 ㅋ
+  projectId: number; // 0이면 연결 없음
 
   @IsString()
   @IsOptional()

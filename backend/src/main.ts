@@ -60,17 +60,21 @@ async function bootstrap() {
     }),
   });
 
-  // 3. 전역 설정 (CORS, Pipe, Filter)
-  app.enableCors({
-    origin: [/*'http://59.29.234.26:3001', */ 'http://localhost:5173'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
+  // 파일 용량 체크
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
 
   // ✅ [추가 2] 정적 파일(이미지) 서빙 설정
   // 설명: 브라우저에서 /uploads/... 로 요청이 오면 프로젝트 루트의 uploads 폴더 내용을 보여줍니다.
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
+  });
+
+  // 3. 전역 설정 (CORS, Pipe, Filter)
+  app.enableCors({
+    origin: [/*'http://59.29.234.26:3001',*/ 'http://localhost:5173'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
   });
 
   app.useGlobalPipes(
@@ -97,16 +101,12 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // 파일 용량 체크
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ limit: '50mb', extended: true }));
-
   // 5. 포트 설정 및 실행 (기존 유지)
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') || 3000;
 
   await app.listen(port);
-  console.log(`🚀 서버가 ${port}번 포트에서 실행 중입니다. (환경: ${process.env.NODE_ENV || 'local'})`);
+  console.log(`서버가 ${port}번 포트에서 실행 중입니다. (환경: ${process.env.NODE_ENV || 'local'})`);
 }
 
 bootstrap();

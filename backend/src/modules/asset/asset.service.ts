@@ -92,7 +92,6 @@ export class AssetService {
           team: true,
           employee: true,
         },
-        // 💡 정렬도 DTO에서 받아서 처리하면 더 좋겠죠? ㅋ
         orderBy: dto.sortField ? { [dto.sortField]: dto.sortOrder || 'desc' } : { registDate: 'desc' },
       }),
       this.prisma.asset.count({ where }),
@@ -117,17 +116,17 @@ export class AssetService {
     });
 
     // console.log('--- [Asset Data 로드 완료] ---');
-    // console.log(JSON.stringify(asset, null, 2)); // 2는 들여쓰기 칸수입니다. ㅋ
+    // console.log(JSON.stringify(asset, null, 2)); // 2는 들여쓰기 칸수입니다.
     // console.log('----------------------------');
 
     if (!asset) {
-      throw new NotFoundException(`ID가 ${id}인 자산을 찾을 수 없어요! ㅋ`);
+      throw new NotFoundException(`ID가 ${id}인 자산을 찾을 수 없어요!`);
     }
 
     return {
       ...asset,
-      assetHistory: asset.assetHistories.filter((h) => h.category === 'ASSIGNMENT' || h.category == 'MOVE'),
-      maintenanceHistory: asset.assetHistories.filter((h) => !(h.category === 'ASSIGNMENT' || h.category === 'MOVE')),
+      assetHistory: asset.assetHistories.filter((h) => h.category === 'ASSIGNMENT' || h.category == 'MOVE' || h.category == 'RETURN'),
+      maintenanceHistory: asset.assetHistories.filter((h) => !(h.category === 'ASSIGNMENT' || h.category === 'MOVE' || h.category == 'RETURN')),
     };
   }
 
@@ -154,7 +153,7 @@ export class AssetService {
             actorName: h.actorName,
             remarks: h.remarks,
             content: h.content,
-            regTime: h.regTime ? new Date(h.regTime) : new Date(),
+            regTime: new Date(),
           })),
         });
       }
